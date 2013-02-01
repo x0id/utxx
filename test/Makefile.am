@@ -12,6 +12,7 @@ TEST_UTXX64_SRCS = \
 	test_name.cpp
 
 TEST_UTXX_SRCS = \
+	test_atomic_value.cpp \
 	test_alloc_fixed_page.cpp \
 	test_basic_udp_receiver.cpp \
 	test_buffer.cpp \
