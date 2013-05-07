@@ -19,38 +19,38 @@
 #ifndef _UTXX_STRIE_HPP_
 #define _UTXX_STRIE_HPP_
 
-#include <utxx/idxmap.hpp>
 #include <vector>
 #include <stdexcept>
 
 namespace utxx {
 
-template <typename Store, typename Data, typename Map,
-                          typename Alloc = std::allocator<char> >
-class strie {
-    typedef Store store_t;
+namespace detail {
+
+template <typename Store, typename Data, typename Map, typename Alloc>
+class strie_node {
+public:
+    typedef typename Store::template rebind<strie_node>::other store_t;
+
+private:
     typedef typename store_t::pointer_t ptr_t;
     typedef Data data_t;
     typedef Map idxmap_t;
 
-public:
     typedef typename idxmap_t::index_t index_t;
     typedef typename idxmap_t::symbol_t symbol_t;
     typedef typename idxmap_t::mask_t mask_t;
 
-private:
-    typedef strie<store_t, data_t, idxmap_t, Alloc> self_t;
     typedef std::vector<ptr_t, Alloc> array_t;
     typedef typename array_t::size_type asize_t;
     typedef typename array_t::iterator it_t;
 
 public:
-    strie() : m_mask(0) {}
+    strie_node() : m_mask(0) {}
 
     void store(store_t& a_store, const char *a_key, const data_t& a_data) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
-        self_t *l_node_ptr = this;
+        strie_node *l_node_ptr = this;
         while ((l_symbol = *l_ptr++) != 0)
             l_node_ptr = l_node_ptr->next_node(a_store, l_symbol);
         l_node_ptr->set_data(a_data);
@@ -59,8 +59,8 @@ public:
     data_t* lookup(store_t& a_store, const char *a_key) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
-        self_t *l_node_ptr = this;
-        self_t *l_save_node_ptr = 0;
+        strie_node *l_node_ptr = this;
+        strie_node *l_save_node_ptr = 0;
         while ((l_symbol = *l_ptr++) != 0) {
             l_node_ptr = l_node_ptr->read_node(a_store, l_symbol);
             if (!l_node_ptr)
@@ -74,7 +74,7 @@ public:
     // should be called before destruction, can't pass a_store to destructor
     void clear(store_t& a_store) {
         for (it_t it=m_children.begin(), e = m_children.end(); it != e; ++it) {
-            self_t *l_ptr = a_store.native_pointer(*it);
+            strie_node *l_ptr = a_store.native_pointer(*it);
             if (!l_ptr)
                 throw std::invalid_argument("bad store pointer");
             l_ptr->clear(a_store);
@@ -83,17 +83,17 @@ public:
     }
 
 private:
-    self_t *read_node(store_t& a_store, symbol_t a_symbol) {
+    strie_node *read_node(store_t& a_store, symbol_t a_symbol) {
         ptr_t l_next = get_next(a_symbol);
         if (l_next == store_t::null)
             return 0;
-        self_t *l_ptr = a_store.native_pointer(l_next);
+        strie_node *l_ptr = a_store.native_pointer(l_next);
         if (!l_ptr)
             throw std::invalid_argument("bad store pointer");
         return l_ptr;
     }
 
-    self_t *next_node(store_t& a_store, symbol_t a_symbol) {
+    strie_node *next_node(store_t& a_store, symbol_t a_symbol) {
         mask_t l_mask;
         index_t l_index;
         idxmap_t::index(m_mask, a_symbol, l_mask, l_index);
@@ -109,7 +109,7 @@ private:
             if (l_next == store_t::null)
                 throw std::runtime_error("null pointer retrieved");
         }
-        self_t *l_ptr = a_store.native_pointer(l_next);
+        strie_node *l_ptr = a_store.native_pointer(l_next);
         if (!l_ptr)
             throw std::invalid_argument("bad store pointer");
         return l_ptr;
@@ -153,6 +153,34 @@ private:
     data_t m_data;
     mask_t m_mask;
     array_t m_children;
+};
+
+};
+
+// namespace detail
+
+template <typename Store, typename Data, typename Map,
+                          typename Alloc = std::allocator<char> >
+class strie {
+public:
+    typedef detail::strie_node<Store, Data, Map, Alloc> node_t;
+    typedef typename node_t::store_t store_t;
+
+    ~strie() {
+        m_root.clear(m_store);
+    }
+
+    void store(const char *a_key, const Data& a_data) {
+        m_root.store(m_store, a_key, a_data);
+    }
+
+    Data* lookup(const char *a_key) {
+        return m_root.lookup(m_store, a_key);
+    }
+
+protected:
+    store_t m_store;
+    node_t m_root;
 };
 
 } // namespace utxx

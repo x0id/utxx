@@ -16,6 +16,7 @@
 #include <config.h>
 
 #include <utxx/strie.hpp>
+#include <utxx/idxmap.hpp>
 #include <utxx/memstat_alloc.hpp>
 
 #include <boost/test/unit_test.hpp>
@@ -81,32 +82,42 @@ struct f0 {
         idxmap_t::init();
     }
 
-    class store;
-    typedef memstat_alloc<char, memstat<cTrie> > trie_alloc;
-    typedef utxx::strie<store, data_t, idxmap_t, trie_alloc> trie_t;
-
     // simplest store implementation
+    template <typename T = void>
     class store {
     public:
-        typedef memstat_alloc<trie_t, memstat<cStore> > alloc_t;
-        store() : cnt(0) {}
-        typedef trie_t* pointer_t;
+        template<typename U>
+        struct rebind { typedef store<U> other; };
+
+        typedef memstat_alloc<T, memstat<cStore> > alloc_t;
+        typedef T* pointer_t;
+
         static const pointer_t null;
+
+        store() : cnt(0) {}
+
         pointer_t allocate() {
             ++cnt;
             pointer_t l_ptr = m_allocator.allocate(1);
-            return new (l_ptr) trie_t;
+            return new (l_ptr) T;
         }
+
         void deallocate(pointer_t a_ptr) {
-            a_ptr->~trie_t();
+            a_ptr->~T();
             m_allocator.deallocate(a_ptr, 1);
         }
-        trie_t *native_pointer(pointer_t a_ptr) const {
+
+        T *native_pointer(pointer_t a_ptr) const {
             return a_ptr;
         }
+
         alloc_t m_allocator;
         int cnt;
     };
+
+    typedef memstat_alloc<char, memstat<cTrie> > trie_alloc;
+    typedef utxx::strie<store<>, data_t, idxmap_t, trie_alloc> trie_t;
+    typedef typename trie_t::node_t node_t;
 
     static const char *makenum(int *cnt) {
         static char buf[11];
@@ -119,7 +130,9 @@ struct f0 {
     }
 
 };
-const f0::store::pointer_t f0::store::null = 0;
+
+template<typename T>
+const typename f0::store<T>::pointer_t f0::store<T>::null = 0;
 
 BOOST_AUTO_TEST_SUITE( test_strie )
 
@@ -127,7 +140,7 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
 {
     { // start objects' life
 
-    store l_store;
+    // store l_store;
     trie_t l_data;
     tab_t l_tab;
 
@@ -146,7 +159,7 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(&l_cnt);
         // insert data into s-trie
-        l_data.store(l_store, l_num, data_t(l_num));
+        l_data.store(l_num, data_t(l_num));
         // insert data into unordered map (hash-table)
         l_tab.insert(pair_t(l_num, l_num));
     }
@@ -157,7 +170,7 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
         memstat<cKey>::cnt + memstat<cTabData>::cnt + memstat<cMap>::cnt;
     BOOST_TEST_MESSAGE(
         "\n      unique objects count: " << l_tab.size() <<
-        "\ntrie:  total nodes created: " << l_store.cnt <<
+        // "\ntrie:  total nodes created: " << l_store.cnt <<
         "\ntrie: num of chars in keys: " << l_cnt <<
         "\n" <<
         "\ntrie: data bytes allocated: " << memstat<cData>::cnt <<
@@ -179,7 +192,7 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
     int l_found = 0, l_exact = 0;
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
-        data_t *l_data_ptr = l_data.lookup(l_store, l_num);
+        data_t *l_data_ptr = l_data.lookup(l_num);
         if (l_data_ptr) {
             // full or substring match only
             BOOST_REQUIRE_EQUAL(0,
@@ -194,14 +207,10 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
 
     // compare full strings matches to hash table
     BOOST_FOREACH(pair_t& p, l_tab) {
-        data_t *l_data_ptr = l_data.lookup(l_store, p.first.c_str());
+        data_t *l_data_ptr = l_data.lookup(p.first.c_str());
         BOOST_REQUIRE(l_data_ptr != 0);
         BOOST_REQUIRE_EQUAL(0, strcmp(p.second.c_str(), l_data_ptr->c_str()));
     }
-
-    // clear store-based data before object destructed
-    // (object does not keep store reference)
-    l_data.clear(l_store);
 
     } // end of all objects life
 
