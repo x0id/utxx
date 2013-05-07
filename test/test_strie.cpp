@@ -17,6 +17,7 @@
 
 #include <utxx/strie.hpp>
 #include <utxx/idxmap.hpp>
+#include <utxx/simple_node_store.hpp>
 #include <utxx/memstat_alloc.hpp>
 
 #include <boost/test/unit_test.hpp>
@@ -56,18 +57,18 @@ struct f0 {
     // memory counters
     enum { cKey, cData, cTabData, cMap, cStore, cTrie };
 
-    typedef memstat_alloc<char, memstat<cKey> > key_alloc;
+    typedef utxx::memstat_alloc<char, memstat<cKey> > key_alloc;
     typedef std::basic_string<char, std::char_traits<char>, key_alloc> key_t;
 
-    typedef memstat_alloc<char, memstat<cData> > data_alloc;
+    typedef utxx::memstat_alloc<char, memstat<cData> > data_alloc;
     typedef std::basic_string<char, std::char_traits<char>, data_alloc> data_t;
 
-    typedef memstat_alloc<char, memstat<cTabData> > tab_data_alloc;
+    typedef utxx::memstat_alloc<char, memstat<cTabData> > tab_data_alloc;
     typedef std::basic_string<char, std::char_traits<char>, tab_data_alloc>
         tab_data_t;
 
     typedef std::pair<const key_t, tab_data_t> pair_t;
-    typedef memstat_alloc<pair_t, memstat<cMap> > map_alloc;
+    typedef utxx::memstat_alloc<pair_t, memstat<cMap> > map_alloc;
 
     typedef std::map<key_t, tab_data_t, std::less<key_t>, map_alloc> map_t;
 
@@ -78,45 +79,10 @@ struct f0 {
     // symbol-to-index mapping with compression factor of 1
     typedef utxx::idxmap<1> idxmap_t;
 
-    f0() {
-        idxmap_t::init();
-    }
-
-    // simplest store implementation
-    template <typename T = void>
-    class store {
-    public:
-        template<typename U>
-        struct rebind { typedef store<U> other; };
-
-        typedef memstat_alloc<T, memstat<cStore> > alloc_t;
-        typedef T* pointer_t;
-
-        static const pointer_t null;
-
-        store() : cnt(0) {}
-
-        pointer_t allocate() {
-            ++cnt;
-            pointer_t l_ptr = m_allocator.allocate(1);
-            return new (l_ptr) T;
-        }
-
-        void deallocate(pointer_t a_ptr) {
-            a_ptr->~T();
-            m_allocator.deallocate(a_ptr, 1);
-        }
-
-        T *native_pointer(pointer_t a_ptr) const {
-            return a_ptr;
-        }
-
-        alloc_t m_allocator;
-        int cnt;
-    };
-
-    typedef memstat_alloc<char, memstat<cTrie> > trie_alloc;
-    typedef utxx::strie<store<>, data_t, idxmap_t, trie_alloc> trie_t;
+    typedef utxx::memstat_alloc<char, memstat<cTrie> > trie_alloc;
+    typedef utxx::memstat_alloc<char, memstat<cStore> > node_alloc;
+    typedef utxx::simple_node_store<void, node_alloc> store_t;
+    typedef utxx::strie<store_t, data_t, idxmap_t, trie_alloc> trie_t;
     typedef typename trie_t::node_t node_t;
 
     static const char *makenum(int *cnt) {
@@ -130,9 +96,6 @@ struct f0 {
     }
 
 };
-
-template<typename T>
-const typename f0::store<T>::pointer_t f0::store<T>::null = 0;
 
 BOOST_AUTO_TEST_SUITE( test_strie )
 

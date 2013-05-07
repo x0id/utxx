@@ -96,7 +96,7 @@ private:
     strie_node *next_node(store_t& a_store, symbol_t a_symbol) {
         mask_t l_mask;
         index_t l_index;
-        idxmap_t::index(m_mask, a_symbol, l_mask, l_index);
+        m_map.index(m_mask, a_symbol, l_mask, l_index);
         ptr_t l_next;
         if ((l_mask & m_mask) == 0) {
             l_next = new_child(a_store);
@@ -142,7 +142,7 @@ private:
     ptr_t get_next(symbol_t a_symbol) {
         mask_t l_mask;
         index_t l_index;
-        idxmap_t::index(m_mask, a_symbol, l_mask, l_index);
+        m_map.index(m_mask, a_symbol, l_mask, l_index);
         if ((l_mask & m_mask) == 0)
             return store_t::null;
         if (l_index < 0 || (asize_t)l_index >= m_children.size())
@@ -153,7 +153,11 @@ private:
     data_t m_data;
     mask_t m_mask;
     array_t m_children;
+    static idxmap_t m_map;
 };
+
+template <typename Store, typename Data, typename Map, typename Alloc>
+Map strie_node<Store, Data, Map, Alloc>::m_map;
 
 };
 
