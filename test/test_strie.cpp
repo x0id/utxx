@@ -16,7 +16,7 @@
 #include <config.h>
 
 #include <utxx/strie.hpp>
-#include <utxx/idxmap.hpp>
+#include <utxx/svector.hpp>
 #include <utxx/simple_node_store.hpp>
 #include <utxx/memstat_alloc.hpp>
 
@@ -52,6 +52,16 @@ struct memstat {
 template<int N>
 size_t memstat<N>::cnt = 0;
 
+static const char *makenum(int *cnt) {
+    static char buf[11];
+    int n = 5 + rand() % 5;
+    for (int i=0; i<n; ++i)
+        buf[i] = '0' + rand() % 10;
+    if (cnt) *cnt += n;
+    buf[n] = 0;
+    return &buf[0];
+}
+
 struct f0 {
 
     // memory counters
@@ -76,25 +86,39 @@ struct f0 {
                                 std::equal_to<key_t>, map_alloc> tab_t;
     typedef typename tab_t::const_iterator tab_it_t;
 
-    // symbol-to-index mapping with compression factor of 1
-    typedef utxx::idxmap<1> idxmap_t;
-
-    typedef utxx::memstat_alloc<char, memstat<cTrie> > trie_alloc;
     typedef utxx::memstat_alloc<char, memstat<cStore> > node_alloc;
     typedef utxx::simple_node_store<void, node_alloc> store_t;
-    typedef utxx::strie<store_t, data_t, idxmap_t, trie_alloc> trie_t;
+    // symbol-to-index mapping with compression factor of 1
+    typedef utxx::idxmap<1> idxmap_t;
+    typedef utxx::memstat_alloc<char, memstat<cTrie> > trie_alloc;
+
+    typedef utxx::svector<char, idxmap_t, trie_alloc> svector_t;
+    typedef utxx::strie<store_t, data_t, svector_t> trie_t;
+
     typedef typename trie_t::node_t node_t;
 
-    static const char *makenum(int *cnt) {
-        static char buf[11];
-        int n = 5 + rand() % 5;
-        for (int i=0; i<n; ++i)
-            buf[i] = '0' + rand() % 10;
-        if (cnt) *cnt += n;
-        buf[n] = 0;
-        return &buf[0];
-    }
+};
 
+struct f1 {
+    typedef uint32_t offset_t;
+    // export variant
+    struct edata {
+        std::string str;
+        edata() : str("") {}
+        edata(const char *s) : str(s) {}
+        bool empty() const { return str.empty(); }
+        template <typename Store>
+        offset_t write_to_file(Store&, std::ofstream& f) {
+            offset_t l_ret = boost::numeric_cast<offset_t, long>(f.tellp());
+            uint8_t n = str.size();
+            f.write((const char *)&n, sizeof(n));
+            f.write((const char *)str.c_str(), n + 1);
+            return l_ret;
+        }
+    };
+    typedef utxx::simple_node_store<> store_t;
+    typedef utxx::svector<> svector_t;
+    typedef utxx::strie<store_t, edata, svector_t> etrie_t;
 };
 
 BOOST_AUTO_TEST_SUITE( test_strie )
@@ -184,6 +208,22 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
     BOOST_REQUIRE_EQUAL(0, memstat<cKey>::cnt );
     BOOST_REQUIRE_EQUAL(0, memstat<cTabData>::cnt );
     BOOST_REQUIRE_EQUAL(0, memstat<cMap>::cnt );
+}
+
+BOOST_FIXTURE_TEST_CASE( compact_test, f1 )
+{
+    etrie_t l_data;
+
+    int l_total = 1000000;
+    srand(1);
+
+    for (int i=0; i<l_total; ++i) {
+        const char *l_num = makenum(0);
+        // insert data into s-trie
+        l_data.store(l_num, edata(l_num));
+    }
+
+    BOOST_REQUIRE_NO_THROW( l_data.write_to_file<offset_t>("lalala") );
 }
 
 #if defined HAVE_BOOST_CHRONO_

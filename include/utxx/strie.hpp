@@ -19,44 +19,43 @@
 #ifndef _UTXX_STRIE_HPP_
 #define _UTXX_STRIE_HPP_
 
-#include <vector>
+#include <fstream>
 #include <stdexcept>
+#include <boost/numeric/conversion/cast.hpp>
 
 namespace utxx {
 
 namespace detail {
 
-template <typename Store, typename Data, typename Map, typename Alloc>
+template <typename Store, typename Data, typename SArray>
 class strie_node {
 public:
     typedef typename Store::template rebind<strie_node>::other store_t;
 
 private:
     typedef typename store_t::pointer_t ptr_t;
-    typedef Data data_t;
-    typedef Map idxmap_t;
 
-    typedef typename idxmap_t::index_t index_t;
-    typedef typename idxmap_t::symbol_t symbol_t;
-    typedef typename idxmap_t::mask_t mask_t;
+    // sparse storage types
+    typedef typename SArray::template rebind<ptr_t>::other sarray_t;
+    typedef typename sarray_t::symbol_t symbol_t;
+    typedef typename sarray_t::pos_t pos_t;
 
-    typedef std::vector<ptr_t, Alloc> array_t;
-    typedef typename array_t::size_type asize_t;
-    typedef typename array_t::iterator it_t;
+    Data m_data;
+    sarray_t m_children;
 
 public:
-    strie_node() : m_mask(0) {}
+    strie_node() {}
 
-    void store(store_t& a_store, const char *a_key, const data_t& a_data) {
+    void store(store_t& a_store, const char *a_key, const Data& a_data) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
         strie_node *l_node_ptr = this;
         while ((l_symbol = *l_ptr++) != 0)
             l_node_ptr = l_node_ptr->next_node(a_store, l_symbol);
-        l_node_ptr->set_data(a_data);
+        l_node_ptr->data(a_data);
     }
 
-    data_t* lookup(store_t& a_store, const char *a_key) {
+    Data* lookup(store_t& a_store, const char *a_key) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
         strie_node *l_node_ptr = this;
@@ -73,6 +72,7 @@ public:
 
     // should be called before destruction, can't pass a_store to destructor
     void clear(store_t& a_store) {
+        typedef typename sarray_t::iterator it_t;
         for (it_t it=m_children.begin(), e = m_children.end(); it != e; ++it) {
             strie_node *l_ptr = a_store.native_pointer(*it);
             if (!l_ptr)
@@ -80,6 +80,52 @@ public:
             l_ptr->clear(a_store);
             a_store.deallocate(*it); // this calls child's destructor
         }
+    }
+
+    template <typename OffsetType>
+    struct enc_node {
+        typedef OffsetType offset_t;
+        typedef typename sarray_t::mask_t mask_t;
+        enum { capacity = sarray_t::capacity };
+
+        offset_t m_data;
+          mask_t m_mask;
+        offset_t m_children[capacity];
+
+        static size_t size_of(unsigned n) {
+            if (n > capacity)
+                throw std::out_of_range("invalid number of node children");
+            return sizeof(enc_node) - (capacity - n) * sizeof(offset_t);
+        }
+
+        offset_t write_to_file(unsigned n, store_t&, std::ofstream& a_ofs) {
+            offset_t l_ret = boost::numeric_cast<offset_t, long>(a_ofs.tellp());
+            a_ofs.write((const char *)this, size_of(n));
+            return l_ret;
+        }
+    };
+
+    template <typename T>
+    T write_to_file(store_t& a_store, std::ofstream& a_ofs) {
+        typedef typename sarray_t::iterator it_t;
+        enc_node<T> l_node;
+        // write data, fill data offset
+        l_node.m_data = m_data.write_to_file(a_store, a_ofs);
+        // fill mask
+        l_node.m_mask = m_children.mask();
+        // write children, fill offsets
+        unsigned i = 0;
+        for (it_t it=m_children.begin(), e = m_children.end(); it != e; ++it) {
+            if (i == sarray_t::capacity)
+                throw std::out_of_range("number of children");
+            strie_node *l_ptr = a_store.native_pointer(*it);
+            if (!l_ptr)
+                throw std::invalid_argument("bad store pointer");
+            l_node.m_children[i] = l_ptr->write_to_file<T>(a_store, a_ofs);
+            ++i;
+        }
+        // write myself - adjust m_children to i elements
+        return l_node.write_to_file(i, a_store, a_ofs);
     }
 
 private:
@@ -94,20 +140,15 @@ private:
     }
 
     strie_node *next_node(store_t& a_store, symbol_t a_symbol) {
-        mask_t l_mask;
-        index_t l_index;
-        m_map.index(m_mask, a_symbol, l_mask, l_index);
+        pos_t l_pos;
         ptr_t l_next;
-        if ((l_mask & m_mask) == 0) {
-            l_next = new_child(a_store);
-            m_children.insert(m_children.begin() + l_index, l_next);
-            m_mask |= l_mask;
-        } else {
-            if (l_index < 0 || (asize_t)l_index >= m_children.size())
-                throw std::runtime_error("bad index returned");
-            l_next = m_children[l_index];
+        if (m_children.find(a_symbol, l_pos)) {
+            l_next = m_children.at(l_pos);
             if (l_next == store_t::null)
                 throw std::runtime_error("null pointer retrieved");
+        } else {
+            l_next = new_child(a_store);
+            m_children.insert(l_pos, l_next);
         }
         strie_node *l_ptr = a_store.native_pointer(l_next);
         if (!l_ptr)
@@ -115,18 +156,20 @@ private:
         return l_ptr;
     }
 
-    void set_data(const data_t& a_data) {
+    void data(const Data& a_data) {
         m_data = a_data;
     }
 
-    data_t& get_data() {
+    Data& data() {
         return m_data;
     }
 
-    const data_t& get_data() const {
+public:
+    const Data& data() const {
         return m_data;
     }
 
+private:
     bool is_data_node() const {
         return !m_data.empty();
     }
@@ -140,43 +183,87 @@ private:
 
     // input - symbol, output - pointer to the next node or NULL
     ptr_t get_next(symbol_t a_symbol) {
-        mask_t l_mask;
-        index_t l_index;
-        m_map.index(m_mask, a_symbol, l_mask, l_index);
-        if ((l_mask & m_mask) == 0)
+        pos_t l_pos;
+        if (m_children.find(a_symbol, l_pos))
+            return m_children.at(l_pos);
+        else
             return store_t::null;
-        if (l_index < 0 || (asize_t)l_index >= m_children.size())
-            throw std::runtime_error("bad index returned");
-        return m_children[l_index];
     }
-
-    data_t m_data;
-    mask_t m_mask;
-    array_t m_children;
-    static idxmap_t m_map;
 };
-
-template <typename Store, typename Data, typename Map, typename Alloc>
-Map strie_node<Store, Data, Map, Alloc>::m_map;
 
 };
 
 // namespace detail
 
-template <typename Store, typename Data, typename Map,
-                          typename Alloc = std::allocator<char> >
+template <typename Store, typename Data, typename SArray>
 class strie {
 public:
-    typedef detail::strie_node<Store, Data, Map, Alloc> node_t;
+    typedef detail::strie_node<Store, Data, SArray> node_t;
     typedef typename node_t::store_t store_t;
 
     ~strie() {
         m_root.clear(m_store);
     }
 
+    const store_t& store() const { return m_store; }
+    const node_t& root() const { return m_root; }
+
     void store(const char *a_key, const Data& a_data) {
         m_root.store(m_store, a_key, a_data);
     }
+
+    Data* lookup(const char *a_key) {
+        return m_root.lookup(m_store, a_key);
+    }
+
+    // RAII-wrapper for std::ofstream
+    // can't just rely on std::ofstream destructor due to enabled exceptions
+    // which could be thrown while in std::ofstream destructor...
+    class ofile {
+        std::ofstream m_ofs;
+    public:
+        ofile(const char *a_fname) {
+            m_ofs.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+            m_ofs.open(a_fname, std::ofstream::out |
+                std::ofstream::binary | std::ofstream::trunc);
+        }
+        ~ofile() {
+            try {
+                m_ofs.close();
+            } catch (...) {
+            }
+        }
+        std::ofstream& ofs() { return m_ofs; }
+    };
+
+    template <typename T>
+    struct enc_trie {
+        T m_root;
+        void write_to_file(store_t& a_store, std::ofstream& a_ofs) {
+            a_ofs.write((const char *)this, sizeof(*this));
+        }
+    };
+
+    template <typename T>
+    void write_to_file(const char *a_fname) {
+        ofile l_file(a_fname);
+        enc_trie<T> l_trie;
+        // write nodes
+        l_trie.m_root = m_root.write_to_file<T>(m_store, l_file.ofs());
+        // write trie
+        l_trie.write_to_file(m_store, l_file.ofs());
+    }
+
+protected:
+    store_t m_store;
+    node_t m_root;
+};
+
+template <typename Store, typename Data, typename SArray>
+class strie_ro {
+public:
+    typedef detail::strie_node<Store, Data, SArray> node_t;
+    typedef typename node_t::store_t store_t;
 
     Data* lookup(const char *a_key) {
         return m_root.lookup(m_store, a_key);

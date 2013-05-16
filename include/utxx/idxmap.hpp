@@ -34,6 +34,7 @@ public:
     typedef int8_t index_t;
     typedef char symbol_t;
     typedef uint16_t mask_t;
+    enum { capacity = 10 };
 
     idxmap();
     void index(mask_t a_mask, symbol_t a_symbol, mask_t& a_ret_mask,
