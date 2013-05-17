@@ -14,11 +14,11 @@
  */
 
 #include <config.h>
-
-#include <utxx/strie.hpp>
-#include <utxx/svector.hpp>
+#include <utxx/mmap_strie.hpp>
+#include <utxx/flat_data_store.hpp>
 #include <utxx/simple_node_store.hpp>
 #include <utxx/memstat_alloc.hpp>
+#include <utxx/svector.hpp>
 
 #include <boost/test/unit_test.hpp>
 #include <boost/foreach.hpp>
@@ -119,6 +119,18 @@ struct f1 {
     typedef utxx::simple_node_store<> store_t;
     typedef utxx::svector<> svector_t;
     typedef utxx::strie<store_t, edata, svector_t> etrie_t;
+};
+
+struct f2 {
+    typedef uint32_t offset_t;
+    typedef utxx::flat_data_store<void, offset_t> store_t;
+    typedef utxx::svector<> svector_t;
+    struct edata {
+        uint8_t m_len;
+        char m_str[1];
+    };
+    // typedef utxx::flat_mem_strie<store_t, edata, svector_t> ftrie_t;
+    typedef utxx::mmap_strie<store_t, edata, svector_t> ftrie_t;
 };
 
 BOOST_AUTO_TEST_SUITE( test_strie )
@@ -224,6 +236,14 @@ BOOST_FIXTURE_TEST_CASE( compact_test, f1 )
     }
 
     BOOST_REQUIRE_NO_THROW( l_data.write_to_file<offset_t>("lalala") );
+}
+
+BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
+{
+    // char l_buf[100];
+    // ftrie_t l_trie(l_buf, 100, 50);
+    ftrie_t l_trie("lalala");
+    /* edata *l_ptr = */ l_trie.lookup("a key");
 }
 
 #if defined HAVE_BOOST_CHRONO_

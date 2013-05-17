@@ -259,21 +259,6 @@ protected:
     node_t m_root;
 };
 
-template <typename Store, typename Data, typename SArray>
-class strie_ro {
-public:
-    typedef detail::strie_node<Store, Data, SArray> node_t;
-    typedef typename node_t::store_t store_t;
-
-    Data* lookup(const char *a_key) {
-        return m_root.lookup(m_store, a_key);
-    }
-
-protected:
-    store_t m_store;
-    node_t m_root;
-};
-
 } // namespace utxx
 
 #endif // _UTXX_STRIE_HPP_
