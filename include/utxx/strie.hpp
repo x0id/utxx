@@ -31,8 +31,6 @@ template <typename Store, typename Data, typename SArray>
 class strie_node {
 public:
     typedef typename Store::template rebind<strie_node>::other store_t;
-
-private:
     typedef typename store_t::pointer_t ptr_t;
 
     // sparse storage types
@@ -40,10 +38,6 @@ private:
     typedef typename sarray_t::symbol_t symbol_t;
     typedef typename sarray_t::pos_t pos_t;
 
-    Data m_data;
-    sarray_t m_children;
-
-public:
     strie_node() {}
 
     void store(store_t& a_store, const char *a_key, const Data& a_data) {
@@ -52,7 +46,7 @@ public:
         strie_node *l_node_ptr = this;
         while ((l_symbol = *l_ptr++) != 0)
             l_node_ptr = l_node_ptr->next_node(a_store, l_symbol);
-        l_node_ptr->data(a_data);
+        l_node_ptr->m_data = a_data;
     }
 
     Data* lookup(store_t& a_store, const char *a_key) {
@@ -156,20 +150,6 @@ private:
         return l_ptr;
     }
 
-    void data(const Data& a_data) {
-        m_data = a_data;
-    }
-
-    Data& data() {
-        return m_data;
-    }
-
-public:
-    const Data& data() const {
-        return m_data;
-    }
-
-private:
     bool is_data_node() const {
         return !m_data.empty();
     }
@@ -189,6 +169,9 @@ private:
         else
             return store_t::null;
     }
+
+    Data m_data;
+    sarray_t m_children;
 };
 
 };

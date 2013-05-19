@@ -42,7 +42,7 @@ public:
 
     T *native_pointer(pointer_t a_ptr) const {
         if (a_ptr > m_ptr_max)
-            throw std::invalid_argument("invalid argument");
+            throw std::invalid_argument("flat_data_store: bad offset");
         return (T*)((char *)m_start + a_ptr);
     }
 

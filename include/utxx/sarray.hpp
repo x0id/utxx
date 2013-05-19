@@ -37,7 +37,7 @@ public:
 
 private:
     mask_t m_mask;
-    Data *m_array;
+    Data m_array[0];
     static IdxMap m_map;
 
 public:
@@ -48,17 +48,13 @@ public:
         return (a_ret.first & m_mask) != 0;
     }
 
-    // FIXME: ensure at() called with valid position only
+    // ensure at() called with valid position only
     Data& at(const pos_t& a_pos) {
-        if ((a_pos.first & m_mask) == 0)
-            throw std::out_of_range("bad mask");
         return m_array[a_pos.second];
     }
 
-    // FIXME: ensure at() called with valid position only
+    // ensure at() called with valid position only
     const Data& at(const pos_t& a_pos) const {
-        if ((a_pos.first & m_mask) == 0)
-            throw std::out_of_range("bad mask");
         return m_array.at[a_pos.second];
     }
 };

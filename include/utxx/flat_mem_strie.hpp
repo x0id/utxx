@@ -20,15 +20,13 @@
 #define _UTXX_FLAT_MEM_STRIE_HPP_
 
 #include <utxx/strie.hpp>
+#include <utxx/sarray.hpp>
 
 namespace utxx {
 
-template <typename Store, typename Data, typename SArray>
+template <typename Store, typename Data, typename SArray = utxx::sarray<> >
 class flat_mem_strie {
 protected:
-    // "generic" store offset type
-    typedef typename Store::pointer_t offset_t;
-
     // data storage type
     typedef typename Store::template rebind<Data>::other data_store_t;
 
@@ -46,6 +44,9 @@ protected:
     typedef typename node_t::store_t node_store_t;
 
 public:
+    // "generic" store offset type
+    typedef typename Store::pointer_t offset_t;
+
     // both data and node storages mapped to the same memory region
     flat_mem_strie(const void *a_mem, offset_t a_len, offset_t a_root)
         : m_node_store(a_mem, a_len)
@@ -56,7 +57,7 @@ public:
     node_t& root(offset_t a_root) const {
         node_t *l_ptr = m_node_store.native_pointer(a_root);
         if (l_ptr == 0)
-            throw 1;
+            throw std::invalid_argument("flat_mem_strie: bad root offset");
         return *l_ptr;
     }
 

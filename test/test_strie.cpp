@@ -124,13 +124,11 @@ struct f1 {
 struct f2 {
     typedef uint32_t offset_t;
     typedef utxx::flat_data_store<void, offset_t> store_t;
-    typedef utxx::svector<> svector_t;
     struct edata {
         uint8_t m_len;
-        char m_str[1];
+        char m_str[0];
     };
-    // typedef utxx::flat_mem_strie<store_t, edata, svector_t> ftrie_t;
-    typedef utxx::mmap_strie<store_t, edata, svector_t> ftrie_t;
+    typedef utxx::mmap_strie<store_t, edata> ftrie_t;
 };
 
 BOOST_AUTO_TEST_SUITE( test_strie )
@@ -139,7 +137,6 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
 {
     { // start objects' life
 
-    // store l_store;
     trie_t l_data;
     tab_t l_tab;
 
@@ -169,7 +166,6 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
         memstat<cKey>::cnt + memstat<cTabData>::cnt + memstat<cMap>::cnt;
     BOOST_TEST_MESSAGE(
         "\n      unique objects count: " << l_tab.size() <<
-        // "\ntrie:  total nodes created: " << l_store.cnt <<
         "\ntrie: num of chars in keys: " << l_cnt <<
         "\n" <<
         "\ntrie: data bytes allocated: " << memstat<cData>::cnt <<
@@ -240,17 +236,43 @@ BOOST_FIXTURE_TEST_CASE( compact_test, f1 )
 
 BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
 {
-    // char l_buf[100];
-    // ftrie_t l_trie(l_buf, 100, 50);
     ftrie_t l_trie("lalala");
-    /* edata *l_ptr = */ l_trie.lookup("a key");
+
+    // looking for random matches
+    int l_total = 1000000;
+    srand(123);
+    int l_found = 0, l_exact = 0;
+    for (int i=0; i<l_total; ++i) {
+        const char *l_num = makenum(0);
+        edata *l_data_ptr = l_trie.lookup(l_num);
+        if (l_data_ptr) {
+            // full or substring match only
+            BOOST_REQUIRE_EQUAL(0,
+                strncmp(l_num, l_data_ptr->m_str, l_data_ptr->m_len));
+            ++l_found;
+            if (!strcmp(l_num, l_data_ptr->m_str))
+                ++l_exact;
+        }
+    }
+    BOOST_TEST_MESSAGE( "from " << l_total << " found: " << l_found
+        << ", exact: " << l_exact );
+
+    // compare full strings matches
+    l_total = 1000000;
+    srand(1);
+    for (int i=0; i<l_total; ++i) {
+        const char *l_num = makenum(0);
+        edata *l_data_ptr = l_trie.lookup(l_num);
+        BOOST_REQUIRE(l_data_ptr != 0);
+        BOOST_REQUIRE_EQUAL(0, strcmp(l_num, l_data_ptr->m_str));
+    }
+    BOOST_TEST_MESSAGE( l_total << " full strings matched" );
 }
 
-#if defined HAVE_BOOST_CHRONO_
+#if defined HAVE_BOOST_CHRONO
 
 BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
 {
-    store l_store;
     trie_t l_data;
     int l_total = 1000000;
     int l_cnt = 0;
@@ -273,15 +295,6 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
     BOOST_TEST_MESSAGE( "map insert time "
         << duration_cast<nanoseconds>(d2).count() << " ns" );
 
-    BOOST_TEST_MESSAGE( " key bytes allocated: " << memstat<cKey>::cnt );
-    BOOST_TEST_MESSAGE( "data bytes allocated: " << memstat<cData>::cnt );
-    BOOST_TEST_MESSAGE( " map bytes allocated: " << memstat<cMap>::cnt );
-    BOOST_TEST_MESSAGE( "unique objects count: " << l_map.size() );
-    BOOST_TEST_MESSAGE( "total byte allocated: " << memstat<cKey>::cnt +
-        memstat<cData>::cnt + memstat<cMap>::cnt );
-    BOOST_TEST_MESSAGE( "    bytes per object: " << (memstat<cKey>::cnt +
-        memstat<cData>::cnt + memstat<cMap>::cnt) / l_map.size() );
-
     srand(1);
     l_cnt = 0;
     memstat<cKey>::cnt = 0;
@@ -299,15 +312,6 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
     BOOST_TEST_MESSAGE( "tab insert time "
         << duration_cast<nanoseconds>(d2a).count() << " ns" );
 
-    BOOST_TEST_MESSAGE( " key bytes allocated: " << memstat<cKey>::cnt );
-    BOOST_TEST_MESSAGE( "data bytes allocated: " << memstat<cData>::cnt );
-    BOOST_TEST_MESSAGE( " tab bytes allocated: " << memstat<cMap>::cnt );
-    BOOST_TEST_MESSAGE( "unique objects count: " << l_tab.size() );
-    BOOST_TEST_MESSAGE( "total byte allocated: " << memstat<cKey>::cnt +
-        memstat<cData>::cnt + memstat<cMap>::cnt );
-    BOOST_TEST_MESSAGE( "    bytes per object: " << (memstat<cKey>::cnt +
-        memstat<cData>::cnt + memstat<cMap>::cnt) / l_tab.size() );
-
     srand(1);
     l_cnt = 0;
     memstat<cKey>::cnt = 0;
@@ -316,27 +320,17 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
     time_point tp3 = clock::now();
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(&l_cnt);
-        l_data.store(l_store, l_num, data_t(l_num));
+        l_data.store(l_num, data_t(l_num));
     }
     duration d3 = (clock::now() - tp3 - d1) / l_total;
 
     BOOST_TEST_MESSAGE( "trie insert time "
         << duration_cast<nanoseconds>(d3).count() << " ns" );
-    BOOST_TEST_MESSAGE( l_store.cnt << " nodes allocated for " << l_cnt
-        << " symbols" );
-    BOOST_TEST_MESSAGE( "in strings allocated: " << memstat<cData>::cnt );
-    BOOST_TEST_MESSAGE( "in store   allocated: " << memstat<cStore>::cnt );
-    BOOST_TEST_MESSAGE( "in strie   allocated: " << memstat<cTrie>::cnt );
-    BOOST_TEST_MESSAGE( "total byte allocated: " << memstat<cData>::cnt +
-        memstat<cStore>::cnt + memstat<cTrie>::cnt );
-    BOOST_TEST_MESSAGE( "    bytes per object: " << (memstat<cData>::cnt +
-        memstat<cStore>::cnt + memstat<cTrie>::cnt) / l_tab.size() );
 
     srand(123);
-    int l_found = 0, l_exact = 0;
     time_point tp4 = clock::now();
     for (int i=0; i<l_total; ++i)
-        l_data.lookup(l_store, makenum(0));
+        l_data.lookup(makenum(0));
     duration d4 = (clock::now() - tp4 - d1) / l_total;
     BOOST_TEST_MESSAGE( "trie lookup time "
         << duration_cast<nanoseconds>(d4).count() << " ns" );
@@ -345,7 +339,6 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
     time_point tp5 = clock::now();
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
-        // key_t l_num = makenum(0);
         l_map.find(l_num);
     }
     duration d5 = (clock::now() - tp5 - d1) / l_total;
@@ -356,7 +349,6 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
     time_point tp6 = clock::now();
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
-        // key_t l_num = makenum(0);
         l_tab.find(l_num);
     }
     duration d6 = (clock::now() - tp6 - d1) / l_total;
@@ -378,8 +370,26 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
         }
     }
     duration d7 = (clock::now() - tp7 - d1) / l_total;
-    BOOST_TEST_MESSAGE( "tab lookup time "
+    BOOST_TEST_MESSAGE( "tab extended lookup time "
         << duration_cast<nanoseconds>(d7).count() << " ns" );
+}
+
+BOOST_FIXTURE_TEST_CASE( chrono_mmap_test, f2 )
+{
+    ftrie_t l_trie("lalala");
+    int l_total = 1000000;
+    srand(123);
+    time_point tp0 = clock::now();
+    for (int i=0; i<l_total; ++i)
+        makenum(0);
+    duration d0 = clock::now() - tp0;
+    srand(123);
+    time_point tp1 = clock::now();
+    for (int i=0; i<l_total; ++i)
+        l_trie.lookup(makenum(0));
+    duration d = (clock::now() - tp1 - d0) / l_total;
+    BOOST_TEST_MESSAGE( "mmap_trie lookup time "
+        << duration_cast<nanoseconds>(d).count() << " ns" );
 }
 
 #endif // HAVE_BOOST_CHRONO

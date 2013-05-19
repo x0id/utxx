@@ -27,16 +27,21 @@ namespace utxx {
 
 namespace { namespace bip = boost::interprocess; }
 
-template <typename Store, typename Data, typename SArray>
+template <typename Store, typename Data, typename SArray = utxx::sarray<> >
 class mmap_strie {
+protected:
     bip::file_mapping m_fmap;
     bip::mapped_region m_reg;
     void  *m_addr; // address of memory region
     size_t m_size; // size of memory region
-    flat_mem_strie<Store, Data, SArray> m_trie;
+    typedef flat_mem_strie<Store, Data, SArray> trie_t;
+    typedef typename trie_t::offset_t offset_t;
+    trie_t m_trie;
 
     // provide root node offset - make it virtual?
-    size_t root() { return 0; } // FIXME
+    virtual size_t root() {
+        return *(offset_t*)((char *)m_addr + (m_size - sizeof(offset_t)));
+    }
 
 public:
     mmap_strie(const char *fname/*, bool a_verbose*/)

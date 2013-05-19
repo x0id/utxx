@@ -56,14 +56,10 @@ public:
     }
 
     Data& at(const pos_t& a_pos) {
-        if ((a_pos.first & m_mask) == 0)
-            throw std::out_of_range("bad mask");
         return m_array.at(a_pos.second);
     }
 
     const Data& at(const pos_t& a_pos) const {
-        if ((a_pos.first & m_mask) == 0)
-            throw std::out_of_range("bad mask");
         return m_array.at(a_pos.second);
     }
 
