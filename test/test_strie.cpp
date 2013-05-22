@@ -108,7 +108,7 @@ struct f1 {
         edata(const char *s) : str(s) {}
         bool empty() const { return str.empty(); }
         template <typename Store>
-        offset_t write_to_file(Store&, std::ofstream& f) {
+        offset_t write_to_file(Store&, std::ofstream& f) const {
             offset_t l_ret = boost::numeric_cast<offset_t, long>(f.tellp());
             uint8_t n = str.size();
             f.write((const char *)&n, sizeof(n));

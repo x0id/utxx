@@ -40,15 +40,30 @@ public:
 
     strie_node() {}
 
-    void store(store_t& a_store, const char *a_key, const Data& a_data) {
+    // build path adding missing nodes if needed
+    strie_node *path_to_node(store_t& a_store, const char *a_key) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
         strie_node *l_node_ptr = this;
         while ((l_symbol = *l_ptr++) != 0)
             l_node_ptr = l_node_ptr->next_node(a_store, l_symbol);
-        l_node_ptr->m_data = a_data;
+        return l_node_ptr;
     }
 
+    // store data, overwrite existing data if any
+    void store(store_t& a_store, const char *a_key, const Data& a_data) {
+        path_to_node(a_store, a_key)->m_data = a_data;
+    }
+
+    // update node data using provided merge-functor
+    template <typename MergeFunctor>
+    void update(store_t& a_store, const char *a_key, const Data& a_data,
+            MergeFunctor& a_merge) {
+        strie_node *l_node_ptr = path_to_node(a_store, a_key);
+        a_merge(l_node_ptr->m_data, a_data);
+    }
+
+    // lookup data by key
     Data* lookup(store_t& a_store, const char *a_key) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
@@ -92,7 +107,7 @@ public:
             return sizeof(enc_node) - (capacity - n) * sizeof(offset_t);
         }
 
-        offset_t write_to_file(unsigned n, store_t&, std::ofstream& a_ofs) {
+        offset_t write_to_file(unsigned n, const store_t&, std::ofstream& a_ofs) const {
             offset_t l_ret = boost::numeric_cast<offset_t, long>(a_ofs.tellp());
             a_ofs.write((const char *)this, size_of(n));
             return l_ret;
@@ -100,8 +115,8 @@ public:
     };
 
     template <typename T>
-    T write_to_file(store_t& a_store, std::ofstream& a_ofs) {
-        typedef typename sarray_t::iterator it_t;
+    T write_to_file(const store_t& a_store, std::ofstream& a_ofs) const {
+        typedef typename sarray_t::const_iterator it_t;
         enc_node<T> l_node;
         // write data, fill data offset
         l_node.m_data = m_data.write_to_file(a_store, a_ofs);
@@ -188,13 +203,18 @@ public:
         m_root.clear(m_store);
     }
 
-    const store_t& store() const { return m_store; }
-    const node_t& root() const { return m_root; }
-
+    // store data, overwrite existing data if any
     void store(const char *a_key, const Data& a_data) {
         m_root.store(m_store, a_key, a_data);
     }
 
+    // update node data using provided merge-functor
+    template <typename MergeFunctor>
+    void update(const char *a_key, const Data& a_data, MergeFunctor& a_merge) {
+        m_root.update(m_store, a_key, a_data, a_merge);
+    }
+
+    // lookup data by key
     Data* lookup(const char *a_key) {
         return m_root.lookup(m_store, a_key);
     }
@@ -235,6 +255,12 @@ public:
         l_trie.m_root = m_root.write_to_file<T>(m_store, l_file.ofs());
         // write trie
         l_trie.write_to_file(m_store, l_file.ofs());
+    }
+
+    // aux method for custom writers
+    template <typename T>
+    T write_root_node(std::ofstream& a_ofs) {
+        return m_root.write_to_file<T>(m_store, a_ofs);
     }
 
 protected:
