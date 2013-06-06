@@ -27,18 +27,61 @@ namespace utxx {
 template <typename Store, typename Data, typename SArray = utxx::sarray<> >
 class flat_mem_strie {
 protected:
+    // default "is data empty" functor
+    static bool empty_f(const Data& obj) { return obj.empty(); }
+
+    // default "is data empty" functor with "exact matching" flag
+    static bool empty_x_f(const Data& obj, bool ex) { return obj.empty(ex); }
+
     // data storage type
     typedef typename Store::template rebind<Data>::other data_store_t;
 
-    // wrapper for data store pointer to implement empty() required by strie
-    struct data_ptr {
-        typedef typename data_store_t::pointer_t data_ptr_t;
-        data_ptr_t m_data_ptr;
-        bool empty() const { return m_data_ptr == data_store_t::null; }
+    // strie data type is store pointer type
+    typedef typename data_store_t::pointer_t data_ptr_t;
+
+    // simple "is data empty" functor based on pointer value only
+    static bool ptr_null_f(const data_ptr_t& a_ptr) {
+        return a_ptr == data_store_t::null;
+    }
+
+    // default "is data empty" functor
+    template <typename F>
+    struct is_empty {
+        data_store_t m_store;
+        F m_is_empty;
+        is_empty(data_store_t& a_store, F& a_is_empty)
+            : m_store(a_store), m_is_empty(a_is_empty)
+        {}
+        bool operator()(const data_ptr_t& a_ptr) {
+            if (a_ptr == data_store_t::null)
+                return true;
+            Data *l_ptr = m_store.native_pointer(a_ptr);
+            if (l_ptr == 0)
+                throw std::invalid_argument("flat_mem_strie: bad data pointer");
+            return m_is_empty(*l_ptr);
+        }
+    };
+
+    // default "is data empty" functor with "exact matching" flag
+    template <typename F>
+    struct is_empty_ex {
+        data_store_t m_store;
+        F m_is_empty;
+        is_empty_ex(data_store_t& a_store, F& a_is_empty)
+            : m_store(a_store), m_is_empty(a_is_empty)
+        {}
+        bool operator()(const data_ptr_t& a_ptr, bool a_exact) {
+            if (a_ptr == data_store_t::null)
+                return true;
+            Data *l_ptr = m_store.native_pointer(a_ptr);
+            if (l_ptr == 0)
+                throw std::invalid_argument("flat_mem_strie: bad data pointer");
+            return m_is_empty(*l_ptr, a_exact);
+        }
     };
 
     // strie node holding data store pointer
-    typedef detail::strie_node<Store, data_ptr, SArray> node_t;
+    typedef detail::strie_node<Store, data_ptr_t, SArray> node_t;
 
     // node storage type
     typedef typename node_t::store_t node_store_t;
@@ -60,13 +103,43 @@ public:
             throw std::invalid_argument("flat_mem_strie: bad root offset");
         return *l_ptr;
     }
-
-    // lookup function, returns pointer to data or zero
-    Data* lookup(const char *a_key) {
-        data_ptr *l_data_ptr = m_root.lookup(m_node_store, a_key);
+    
+    // lookup data by key, prefix matching only
+    template <typename F>
+    Data* lookup(const char *a_key, F a_is_empty) {
+        data_ptr_t *l_data_ptr = m_root.lookup(m_node_store, a_key,
+            is_empty<F>(m_data_store, a_is_empty));
         if (l_data_ptr == 0)
             return 0;
-        return m_data_store.native_pointer(l_data_ptr->m_data_ptr);
+        return m_data_store.native_pointer(*l_data_ptr);
+    }
+
+    // lookup data by key, prefix matching only, simple "data empty" functor
+    Data* lookup_simple(const char *a_key) {
+        data_ptr_t *l_data_ptr = m_root.lookup(m_node_store, a_key, ptr_null_f);
+        if (l_data_ptr == 0)
+            return 0;
+        return m_data_store.native_pointer(*l_data_ptr);
+    }
+
+    // lookup data by key, prefix matching only, default "data empty" functor
+    Data* lookup(const char *a_key) {
+        return lookup(a_key, empty_f);
+    }
+
+    // lookup data by key, exact matching allowed
+    template <typename F>
+    Data* lookup_exact(const char *a_key, F a_is_empty) {
+        data_ptr_t *l_data_ptr = m_root.lookup_exact(m_node_store, a_key,
+            is_empty_ex<F>(m_data_store, a_is_empty));
+        if (l_data_ptr == 0)
+            return 0;
+        return m_data_store.native_pointer(*l_data_ptr);
+    }
+
+    // lookup data by key, exact matching allowed, default "data empty" functor
+    Data* lookup_exact(const char *a_key) {
+        return lookup_exact(a_key, empty_x_f);
     }
 
 protected:

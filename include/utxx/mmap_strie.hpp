@@ -52,8 +52,32 @@ public:
         , m_trie(m_addr, m_size, root())
     {}
 
-    // lookup function, returns pointer to data or zero
-    Data* lookup(const char *a_key) { return m_trie.lookup(a_key); }
+    // lookup data by key, prefix matching only
+    template <typename F>
+    Data* lookup(const char *a_key, F is_empty) {
+        return m_trie.lookup(a_key, is_empty);
+    }
+
+    // lookup data by key, prefix matching only, default "data empty" functor
+    Data* lookup(const char *a_key) {
+        return m_trie.lookup(a_key);
+    }
+
+    // lookup data by key, prefix matching only, simple "data empty" functor
+    Data* lookup_simple(const char *a_key) {
+        return m_trie.lookup_simple(a_key);
+    }
+
+    // lookup data by key, exact matching allowed
+    template <typename F>
+    Data* lookup_exact(const char *a_key, F is_empty) {
+        return m_trie.lookup_exact(a_key, is_empty);
+    }
+
+    // lookup data by key, exact matching allowed, default "data empty" functor
+    Data* lookup_exact(const char *a_key) {
+        return m_trie.lookup_exact(a_key);
+    }
 };
 
 } // namespace utxx

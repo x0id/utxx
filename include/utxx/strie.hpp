@@ -64,7 +64,8 @@ public:
     }
 
     // lookup data by key
-    Data* lookup(store_t& a_store, const char *a_key) {
+    template <typename F>
+    Data* lookup(store_t& a_store, const char *a_key, F is_empty) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
         strie_node *l_node_ptr = this;
@@ -73,7 +74,24 @@ public:
             l_node_ptr = l_node_ptr->read_node(a_store, l_symbol);
             if (!l_node_ptr)
                 break;
-            if (l_node_ptr->is_data_node())
+            if (!is_empty(l_node_ptr->m_data))
+                l_save_node_ptr = l_node_ptr;
+        }
+        return l_save_node_ptr ? &l_save_node_ptr->m_data : 0;
+    }
+
+    // lookup data by key, passing "exact match flag"
+    template <typename F>
+    Data* lookup_exact(store_t& a_store, const char *a_key, F is_empty) {
+        const char *l_ptr = a_key;
+        symbol_t l_symbol;
+        strie_node *l_node_ptr = this;
+        strie_node *l_save_node_ptr = 0;
+        while ((l_symbol = *l_ptr++) != 0) {
+            l_node_ptr = l_node_ptr->read_node(a_store, l_symbol);
+            if (!l_node_ptr)
+                break;
+            if (!is_empty(l_node_ptr->m_data, !(*l_ptr)))
                 l_save_node_ptr = l_node_ptr;
         }
         return l_save_node_ptr ? &l_save_node_ptr->m_data : 0;
@@ -114,12 +132,16 @@ public:
         }
     };
 
-    template <typename T>
-    T write_to_file(const store_t& a_store, std::ofstream& a_ofs) const {
+    template <typename T, typename F>
+    T write_to_file(const store_t& a_store, std::ofstream& a_ofs, F is_empty)
+            const {
         typedef typename sarray_t::const_iterator it_t;
         enc_node<T> l_node;
         // write data, fill data offset
-        l_node.m_data = m_data.write_to_file(a_store, a_ofs);
+        if (is_empty(m_data))
+            l_node.m_data = 0;
+        else
+            l_node.m_data = m_data.write_to_file(a_store, a_ofs);
         // fill mask
         l_node.m_mask = m_children.mask();
         // write children, fill offsets
@@ -130,7 +152,7 @@ public:
             strie_node *l_ptr = a_store.native_pointer(*it);
             if (!l_ptr)
                 throw std::invalid_argument("bad store pointer");
-            l_node.m_children[i] = l_ptr->write_to_file<T>(a_store, a_ofs);
+            l_node.m_children[i] = l_ptr->write_to_file<T, F>(a_store, a_ofs, is_empty);
             ++i;
         }
         // write myself - adjust m_children to i elements
@@ -165,10 +187,6 @@ private:
         return l_ptr;
     }
 
-    bool is_data_node() const {
-        return !m_data.empty();
-    }
-
     ptr_t new_child(store_t& a_store) {
         ptr_t l_ptr = a_store.allocate();
         if (l_ptr == store_t::null)
@@ -195,6 +213,13 @@ private:
 
 template <typename Store, typename Data, typename SArray>
 class strie {
+
+    // default "is data empty" functor
+    static bool empty_f(const Data& obj) { return obj.empty(); }
+
+    // default "is data empty" functor with "exact matching" flag
+    static bool empty_x_f(const Data& obj, bool ex) { return obj.empty(ex); }
+
 public:
     typedef detail::strie_node<Store, Data, SArray> node_t;
     typedef typename node_t::store_t store_t;
@@ -214,9 +239,26 @@ public:
         m_root.update(m_store, a_key, a_data, a_merge);
     }
 
-    // lookup data by key
+    // lookup data by key, prefix matching
+    template <typename F>
+    Data* lookup(const char *a_key, F is_empty) {
+        return m_root.lookup(m_store, a_key, is_empty);
+    }
+
+    // lookup data by key, prefix matching, using default "data empty" functor
     Data* lookup(const char *a_key) {
-        return m_root.lookup(m_store, a_key);
+        return lookup(a_key, empty_f);
+    }
+
+    // lookup data by key, exact matching
+    template <typename F>
+    Data* lookup_exact(const char *a_key, F is_empty) {
+        return m_root.lookup_exact(m_store, a_key, is_empty);
+    }
+
+    // lookup data by key, exact matching, using default "data empty" functor
+    Data* lookup_exact(const char *a_key) {
+        return lookup_exact(a_key, empty_x_f);
     }
 
     // RAII-wrapper for std::ofstream
@@ -239,6 +281,7 @@ public:
         std::ofstream& ofs() { return m_ofs; }
     };
 
+    // default trie header
     template <typename T>
     struct enc_trie {
         T m_root;
@@ -247,20 +290,35 @@ public:
         }
     };
 
-    template <typename T>
-    void write_to_file(const char *a_fname) {
+    // write trie to file
+    template <typename T, typename F>
+    void write_to_file(const char *a_fname, F is_empty) {
         ofile l_file(a_fname);
+        char l_magic = 'A';
+        l_file.ofs().write(&l_magic, sizeof(l_magic));
         enc_trie<T> l_trie;
         // write nodes
-        l_trie.m_root = m_root.write_to_file<T>(m_store, l_file.ofs());
+        l_trie.m_root = m_root.write_to_file<T, F>(m_store, l_file.ofs(), is_empty);
         // write trie
         l_trie.write_to_file(m_store, l_file.ofs());
     }
 
+    // write trie to file, default "data empty" functor
+    template <typename T>
+    void write_to_file(const char *a_fname) {
+        write_to_file<T>(a_fname, empty_f);
+    }
+
     // aux method for custom writers
+    template <typename T, typename F>
+    T write_root_node(std::ofstream& a_ofs, F is_empty) {
+        return m_root.write_to_file<T>(m_store, a_ofs, is_empty);
+    }
+
+    // aux method for custom writers, default "data empty" functor
     template <typename T>
     T write_root_node(std::ofstream& a_ofs) {
-        return m_root.write_to_file<T>(m_store, a_ofs);
+        return write_root_node<T>(a_ofs, empty_f);
     }
 
 protected:

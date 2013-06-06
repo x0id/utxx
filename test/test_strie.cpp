@@ -127,6 +127,8 @@ struct f2 {
     struct edata {
         uint8_t m_len;
         char m_str[0];
+        bool empty() const { return false; }
+        bool empty(bool exact) const { return !exact; }
     };
     typedef utxx::mmap_strie<store_t, edata> ftrie_t;
 };
@@ -231,12 +233,13 @@ BOOST_FIXTURE_TEST_CASE( compact_test, f1 )
         l_data.store(l_num, edata(l_num));
     }
 
-    BOOST_REQUIRE_NO_THROW( l_data.write_to_file<offset_t>("lalala") );
+    BOOST_REQUIRE_NO_THROW(( l_data.write_to_file<offset_t>("lalala") ));
 }
 
 BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
 {
     ftrie_t l_trie("lalala");
+    BOOST_TEST_MESSAGE( "reading ftrie" );
 
     // looking for random matches
     int l_total = 1000000;
@@ -244,7 +247,7 @@ BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
     int l_found = 0, l_exact = 0;
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
-        edata *l_data_ptr = l_trie.lookup(l_num);
+        edata *l_data_ptr = l_trie.lookup_simple(l_num);
         if (l_data_ptr) {
             // full or substring match only
             BOOST_REQUIRE_EQUAL(0,
@@ -257,12 +260,27 @@ BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
     BOOST_TEST_MESSAGE( "from " << l_total << " found: " << l_found
         << ", exact: " << l_exact );
 
+    // looking for random exact matches
+    srand(123); l_found = 0;
+    for (int i=0; i<l_total; ++i) {
+        const char *l_num = makenum(0);
+        edata *l_data_ptr = l_trie.lookup_exact(l_num);
+        if (l_data_ptr) {
+            // full match only
+            BOOST_REQUIRE_EQUAL(0, strcmp(l_num, l_data_ptr->m_str));
+            ++l_found;
+        }
+    }
+    BOOST_TEST_MESSAGE( "from " << l_total << " found: " << l_found );
+
+    BOOST_REQUIRE_EQUAL(l_exact, l_found);
+
     // compare full strings matches
     l_total = 1000000;
     srand(1);
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
-        edata *l_data_ptr = l_trie.lookup(l_num);
+        edata *l_data_ptr = l_trie.lookup_simple(l_num);
         BOOST_REQUIRE(l_data_ptr != 0);
         BOOST_REQUIRE_EQUAL(0, strcmp(l_num, l_data_ptr->m_str));
     }
@@ -387,6 +405,24 @@ BOOST_FIXTURE_TEST_CASE( chrono_mmap_test, f2 )
     time_point tp1 = clock::now();
     for (int i=0; i<l_total; ++i)
         l_trie.lookup(makenum(0));
+    duration d = (clock::now() - tp1 - d0) / l_total;
+    BOOST_TEST_MESSAGE( "mmap_trie lookup time "
+        << duration_cast<nanoseconds>(d).count() << " ns" );
+}
+
+BOOST_FIXTURE_TEST_CASE( chrono_mmap_test_simple, f2 )
+{
+    ftrie_t l_trie("lalala");
+    int l_total = 1000000;
+    srand(123);
+    time_point tp0 = clock::now();
+    for (int i=0; i<l_total; ++i)
+        makenum(0);
+    duration d0 = clock::now() - tp0;
+    srand(123);
+    time_point tp1 = clock::now();
+    for (int i=0; i<l_total; ++i)
+        l_trie.lookup_simple(makenum(0));
     duration d = (clock::now() - tp1 - d0) / l_total;
     BOOST_TEST_MESSAGE( "mmap_trie lookup time "
         << duration_cast<nanoseconds>(d).count() << " ns" );
