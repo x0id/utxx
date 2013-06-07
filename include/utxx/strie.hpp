@@ -63,6 +63,21 @@ public:
         a_merge(l_node_ptr->m_data, a_data);
     }
 
+    // fold through trie nodes following key components
+    template <typename A, typename F>
+    void fold(store_t& store, const char *key, A& acc, F proc) {
+        const char *l_ptr = key;
+        symbol_t l_symbol;
+        strie_node *l_node_ptr = this;
+        while ((l_symbol = *l_ptr++) != 0) {
+            l_node_ptr = l_node_ptr->read_node(store, l_symbol);
+            if (!l_node_ptr)
+                break;
+            if (!proc(acc, l_node_ptr->m_data, l_ptr))
+                break;
+        }
+    }
+
     // lookup data by key
     template <typename F>
     Data* lookup(store_t& a_store, const char *a_key, F is_empty) {
@@ -220,6 +235,13 @@ class strie {
     // default "is data empty" functor with "exact matching" flag
     static bool empty_x_f(const Data& obj, bool ex) { return obj.empty(ex); }
 
+    // default fold functor
+    template <typename A>
+    static bool proc_f(A& acc, const Data& obj, const char *) {
+        if (!obj.empty()) acc = obj;
+        return true;
+    }
+
 public:
     typedef detail::strie_node<Store, Data, SArray> node_t;
     typedef typename node_t::store_t store_t;
@@ -237,6 +259,18 @@ public:
     template <typename MergeFunctor>
     void update(const char *a_key, const Data& a_data, MergeFunctor& a_merge) {
         m_root.update(m_store, a_key, a_data, a_merge);
+    }
+
+    // fold through trie nodes following key components
+    template <typename A, typename F>
+    void fold(const char *key, A& acc, F proc) {
+        m_root.fold(m_store, key, acc, proc);
+    }
+
+    // fold through trie nodes following key components, default processing
+    template <typename A>
+    void fold(const char *key, A& acc) {
+        m_root.fold<A>(m_store, key, acc, proc_f<A>);
     }
 
     // lookup data by key, prefix matching

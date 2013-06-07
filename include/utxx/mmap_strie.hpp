@@ -52,6 +52,12 @@ public:
         , m_trie(m_addr, m_size, root())
     {}
 
+    // fold through trie nodes following key components
+    template <typename A, typename F>
+    void fold(const char *key, A& acc, F proc) {
+        m_trie.fold(key, acc, proc);
+    }
+
     // lookup data by key, prefix matching only
     template <typename F>
     Data* lookup(const char *a_key, F is_empty) {

@@ -44,6 +44,25 @@ protected:
         return a_ptr == data_store_t::null;
     }
 
+    // default processing functor for fold method
+    template <typename F>
+    struct proc_f {
+        data_store_t m_store;
+        F m_proc_f;
+        proc_f(data_store_t& a_store, F& a_proc_f)
+            : m_store(a_store), m_proc_f(a_proc_f)
+        {}
+        template <typename A>
+        bool operator()(A& acc, const data_ptr_t& a_ptr, const char *pos) {
+            if (a_ptr == data_store_t::null)
+                return true;
+            Data *l_ptr = m_store.native_pointer(a_ptr);
+            if (l_ptr == 0)
+                throw std::invalid_argument("flat_mem_strie: bad data pointer");
+            return m_proc_f(acc, *l_ptr, pos);
+        }
+    };
+
     // default "is data empty" functor
     template <typename F>
     struct is_empty {
@@ -104,6 +123,12 @@ public:
         return *l_ptr;
     }
     
+    // fold through trie nodes following key components
+    template <typename A, typename F>
+    void fold(const char *key, A& acc, F proc) {
+        m_root.fold<A>(m_node_store, key, acc, proc_f<F>(m_data_store, proc));
+    }
+
     // lookup data by key, prefix matching only
     template <typename F>
     Data* lookup(const char *a_key, F a_is_empty) {

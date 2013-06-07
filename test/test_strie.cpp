@@ -131,6 +131,11 @@ struct f2 {
         bool empty(bool exact) const { return !exact; }
     };
     typedef utxx::mmap_strie<store_t, edata> ftrie_t;
+
+    static bool copy_exact_f(std::string &acc, edata& data, const char *pos) {
+        if (!(*pos)) acc.assign(data.m_str, data.m_len);
+        return true;
+    }
 };
 
 BOOST_AUTO_TEST_SUITE( test_strie )
@@ -189,8 +194,15 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
     int l_found = 0, l_exact = 0;
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
+        // direct data lookup
         data_t *l_data_ptr = l_data.lookup(l_num);
+        // alternative way to find data
+        data_t l_acc;
+        l_data.fold(l_num, l_acc);
+        // if data found
         if (l_data_ptr) {
+            // check results are equal
+            BOOST_REQUIRE_EQUAL(l_acc, *l_data_ptr);
             // full or substring match only
             BOOST_REQUIRE_EQUAL(0,
                 strncmp(l_num, l_data_ptr->c_str(), l_data_ptr->length()));
@@ -264,11 +276,19 @@ BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
     srand(123); l_found = 0;
     for (int i=0; i<l_total; ++i) {
         const char *l_num = makenum(0);
+        // direct data lookup
         edata *l_data_ptr = l_trie.lookup_exact(l_num);
+        // alternative way to find data
+        std::string l_ret;
+        l_trie.fold(l_num, l_ret, copy_exact_f);
         if (l_data_ptr) {
+            // check results are equal
+            BOOST_REQUIRE_EQUAL(0, strcmp(l_ret.c_str(), l_data_ptr->m_str));
             // full match only
             BOOST_REQUIRE_EQUAL(0, strcmp(l_num, l_data_ptr->m_str));
             ++l_found;
+        } else {
+            BOOST_REQUIRE_EQUAL(0, l_ret.size());
         }
     }
     BOOST_TEST_MESSAGE( "from " << l_total << " found: " << l_found );
