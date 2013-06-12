@@ -56,8 +56,8 @@ public:
     }
 
     // update node data using provided merge-functor
-    template <typename MergeFunctor>
-    void update(store_t& a_store, const char *a_key, const Data& a_data,
+    template <typename MergeFunctor, typename DataT>
+    void update(store_t& a_store, const char *a_key, const DataT& a_data,
             MergeFunctor& a_merge) {
         strie_node *l_node_ptr = path_to_node(a_store, a_key);
         a_merge(l_node_ptr->m_data, a_data);
@@ -256,8 +256,8 @@ public:
     }
 
     // update node data using provided merge-functor
-    template <typename MergeFunctor>
-    void update(const char *a_key, const Data& a_data, MergeFunctor& a_merge) {
+    template <typename MergeFunctor, typename DataT>
+    void update(const char *a_key, const DataT& a_data, MergeFunctor& a_merge) {
         m_root.update(m_store, a_key, a_data, a_merge);
     }
 
