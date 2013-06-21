@@ -40,6 +40,7 @@ TEST_UTXX_SRCS = \
 	test_pidfile.cpp \
 	test_robust_mutex.cpp \
 	test_running_stat.cpp \
+	test_strie.cpp \
 	test_string.cpp \
 	test_throttler.cpp \
 	test_timestamp.cpp \
