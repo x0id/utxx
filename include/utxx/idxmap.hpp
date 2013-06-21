@@ -36,6 +36,16 @@ public:
     typedef uint16_t mask_t;
     enum { capacity = 10 };
 
+    class bad_symbol : public std::invalid_argument {
+        symbol_t m_symbol;
+    public:
+        bad_symbol(symbol_t a_symbol)
+            : std::invalid_argument("bad symbol")
+            , m_symbol(a_symbol)
+        {}
+        symbol_t symbol() const { return m_symbol; }
+    };
+
     idxmap();
     void index(mask_t a_mask, symbol_t a_symbol, mask_t& a_ret_mask,
         index_t& a_ret_index);
@@ -83,7 +93,7 @@ void idxmap<1>::index(mask_t a_mask, symbol_t a_symbol, mask_t& a_ret_mask,
         throw std::invalid_argument("bad mask");
     int i = a_symbol - '0';
     if (i < 0 || i > 9)
-        throw std::invalid_argument("bad symbol");
+        throw bad_symbol(a_symbol);
     a_ret_mask = 1 << i;
     a_ret_index = m_maps[a_mask | (i << 10)];
 }
@@ -96,7 +106,7 @@ void idxmap<2>::index(mask_t a_mask, symbol_t a_symbol, mask_t& a_ret_mask,
         throw std::invalid_argument("bad mask");
     int i = a_symbol - '0';
     if (i < 0 || i > 9)
-        throw std::invalid_argument("bad symbol");
+        throw bad_symbol(a_symbol);
     mask_t m = a_mask | (i << 10);
     a_ret_mask = 1 << i;
     if ((m & 1) != 0)

@@ -37,6 +37,7 @@ public:
     typedef typename SArray::template rebind<ptr_t>::other sarray_t;
     typedef typename sarray_t::symbol_t symbol_t;
     typedef typename sarray_t::pos_t pos_t;
+    typedef typename sarray_t::bad_symbol bad_symbol;
 
     strie_node() {}
 
@@ -124,13 +125,13 @@ public:
         }
     }
 
-    template <typename OffsetType>
+    template <typename DataType, typename OffsetType>
     struct enc_node {
         typedef OffsetType offset_t;
         typedef typename sarray_t::mask_t mask_t;
         enum { capacity = sarray_t::capacity };
 
-        offset_t m_data;
+        DataType m_data;
           mask_t m_mask;
         offset_t m_children[capacity];
 
@@ -140,23 +141,21 @@ public:
             return sizeof(enc_node) - (capacity - n) * sizeof(offset_t);
         }
 
-        offset_t write_to_file(unsigned n, const store_t&, std::ofstream& a_ofs) const {
+        offset_t
+        write_to_file(unsigned n, const store_t&, std::ofstream& a_ofs) const {
             offset_t l_ret = boost::numeric_cast<offset_t, long>(a_ofs.tellp());
             a_ofs.write((const char *)this, size_of(n));
             return l_ret;
         }
     };
 
-    template <typename T, typename F>
-    T write_to_file(const store_t& a_store, std::ofstream& a_ofs, F is_empty)
+    template <typename D, typename T>
+    T write_to_file(const store_t& a_store, std::ofstream& a_ofs)
             const {
         typedef typename sarray_t::const_iterator it_t;
-        enc_node<T> l_node;
-        // write data, fill data offset
-        if (is_empty(m_data))
-            l_node.m_data = 0;
-        else
-            l_node.m_data = m_data.write_to_file(a_store, a_ofs);
+        enc_node<D, T> l_node;
+        // write data (black box op)
+        l_node.m_data = m_data.write_to_file(a_store, a_ofs);
         // fill mask
         l_node.m_mask = m_children.mask();
         // write children, fill offsets
@@ -167,7 +166,7 @@ public:
             strie_node *l_ptr = a_store.native_pointer(*it);
             if (!l_ptr)
                 throw std::invalid_argument("bad store pointer");
-            l_node.m_children[i] = l_ptr->write_to_file<T, F>(a_store, a_ofs, is_empty);
+            l_node.m_children[i] = l_ptr->write_to_file<D, T>(a_store, a_ofs);
             ++i;
         }
         // write myself - adjust m_children to i elements
@@ -325,34 +324,22 @@ public:
     };
 
     // write trie to file
-    template <typename T, typename F>
-    void write_to_file(const char *a_fname, F is_empty) {
+    template <typename D, typename T>
+    void write_to_file(const char *a_fname) {
         ofile l_file(a_fname);
         char l_magic = 'A';
         l_file.ofs().write(&l_magic, sizeof(l_magic));
         enc_trie<T> l_trie;
         // write nodes
-        l_trie.m_root = m_root.write_to_file<T, F>(m_store, l_file.ofs(), is_empty);
+        l_trie.m_root = m_root.write_to_file<D, T>(m_store, l_file.ofs());
         // write trie
         l_trie.write_to_file(m_store, l_file.ofs());
     }
 
-    // write trie to file, default "data empty" functor
-    template <typename T>
-    void write_to_file(const char *a_fname) {
-        write_to_file<T>(a_fname, empty_f);
-    }
-
     // aux method for custom writers
-    template <typename T, typename F>
-    T write_root_node(std::ofstream& a_ofs, F is_empty) {
-        return m_root.write_to_file<T>(m_store, a_ofs, is_empty);
-    }
-
-    // aux method for custom writers, default "data empty" functor
-    template <typename T>
+    template <typename D, typename T>
     T write_root_node(std::ofstream& a_ofs) {
-        return write_root_node<T>(a_ofs, empty_f);
+        return m_root.write_to_file<D, T>(m_store, a_ofs);
     }
 
 protected:

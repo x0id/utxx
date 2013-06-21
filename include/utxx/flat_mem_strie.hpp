@@ -106,8 +106,13 @@ protected:
     typedef typename node_t::store_t node_store_t;
 
 public:
+    //  data type
+    typedef Data data_t;
     // "generic" store offset type
     typedef typename Store::pointer_t offset_t;
+    // bad symbol exception handling types
+    typedef typename node_t::symbol_t symbol_t;
+    typedef typename node_t::bad_symbol bad_symbol;
 
     // both data and node storages mapped to the same memory region
     flat_mem_strie(const void *a_mem, offset_t a_len, offset_t a_root)

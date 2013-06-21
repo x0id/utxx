@@ -14,6 +14,8 @@
  */
 
 #include <config.h>
+#include <utxx/strie.hpp>
+#include <utxx/flat_mem_strie.hpp>
 #include <utxx/mmap_strie.hpp>
 #include <utxx/flat_data_store.hpp>
 #include <utxx/simple_node_store.hpp>
@@ -109,11 +111,15 @@ struct f1 {
         bool empty() const { return str.empty(); }
         template <typename Store>
         offset_t write_to_file(Store&, std::ofstream& f) const {
-            offset_t l_ret = boost::numeric_cast<offset_t, long>(f.tellp());
             uint8_t n = str.size();
-            f.write((const char *)&n, sizeof(n));
-            f.write((const char *)str.c_str(), n + 1);
-            return l_ret;
+            if (n > 0) {
+                offset_t l_ret = boost::numeric_cast<offset_t, long>(f.tellp());
+                f.write((const char *)&n, sizeof(n));
+                f.write((const char *)str.c_str(), n + 1);
+                return l_ret;
+            } else {
+                return 0;
+            }
         }
     };
     typedef utxx::simple_node_store<> store_t;
@@ -130,7 +136,14 @@ struct f2 {
         bool empty() const { return false; }
         bool empty(bool exact) const { return !exact; }
     };
-    typedef utxx::mmap_strie<store_t, edata> ftrie_t;
+    typedef utxx::flat_mem_strie<store_t, edata> mem_trie_t;
+    typedef utxx::mmap_strie<mem_trie_t> ftrie_t;
+
+    static offset_t root(const void *m_addr, size_t m_size) {
+        size_t s = sizeof(offset_t);
+        if (m_size < s) throw std::runtime_error("no space for root");
+        return *(const offset_t *)((const char *)m_addr + m_size - s);
+    }
 
     static bool copy_exact_f(std::string &acc, edata& data, const char *pos) {
         if (!(*pos)) acc.assign(data.m_str, data.m_len);
@@ -245,12 +258,14 @@ BOOST_FIXTURE_TEST_CASE( compact_test, f1 )
         l_data.store(l_num, edata(l_num));
     }
 
-    BOOST_REQUIRE_NO_THROW(( l_data.write_to_file<offset_t>("lalala") ));
+    BOOST_REQUIRE_NO_THROW((
+        l_data.write_to_file<offset_t, offset_t>("lalala")
+    ));
 }
 
 BOOST_FIXTURE_TEST_CASE( mmap_test, f2 )
 {
-    ftrie_t l_trie("lalala");
+    ftrie_t l_trie("lalala", root);
     BOOST_TEST_MESSAGE( "reading ftrie" );
 
     // looking for random matches
@@ -414,7 +429,7 @@ BOOST_FIXTURE_TEST_CASE( chrono_test, f0 )
 
 BOOST_FIXTURE_TEST_CASE( chrono_mmap_test, f2 )
 {
-    ftrie_t l_trie("lalala");
+    ftrie_t l_trie("lalala", root);
     int l_total = 1000000;
     srand(123);
     time_point tp0 = clock::now();
@@ -432,7 +447,7 @@ BOOST_FIXTURE_TEST_CASE( chrono_mmap_test, f2 )
 
 BOOST_FIXTURE_TEST_CASE( chrono_mmap_test_simple, f2 )
 {
-    ftrie_t l_trie("lalala");
+    ftrie_t l_trie("lalala", root);
     int l_total = 1000000;
     srand(123);
     time_point tp0 = clock::now();

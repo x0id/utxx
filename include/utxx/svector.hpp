@@ -38,6 +38,7 @@ public:
     struct rebind { typedef svector<U, IdxMap, Alloc> other; };
 
     typedef typename IdxMap::symbol_t symbol_t;
+    typedef typename IdxMap::bad_symbol bad_symbol;
     typedef std::pair<mask_t, index_t> pos_t;
 
 private:
