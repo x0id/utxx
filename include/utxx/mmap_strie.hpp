@@ -4,7 +4,6 @@
  * \brief s-trie in memory mapped region
  *
  * \author Dmitriy Kargapolov
- * \version 1.0
  * \since 16 April 2013
  *
  */
@@ -19,6 +18,10 @@
 #ifndef _UTXX_MMAP_STRIE_HPP_
 #define _UTXX_MMAP_STRIE_HPP_
 
+#include <utxx/strie.hpp>
+#include <utxx/flat_data_store.hpp>
+#include <utxx/sarray.hpp>
+
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 
@@ -26,19 +29,21 @@ namespace utxx {
 
 namespace { namespace bip = boost::interprocess; }
 
-template <typename MemSTrie>
+template <typename Data, typename Offset = int>
 class mmap_strie {
 protected:
-    typedef MemSTrie trie_t;
-    typedef typename trie_t::data_t data_t;
-    typedef typename trie_t::offset_t offset_t;
+    typedef strie<flat_data_store<void, Offset>, Data, sarray<> > trie_t;
+    typedef typename trie_t::store_t store_t;
+    typedef typename trie_t::ptr_t ptr_t;
 
     bip::file_mapping  m_fmap;
     bip::mapped_region m_reg;
 
-    const void *m_addr; // address of memory region
-    size_t      m_size; // size of memory region
-    trie_t      m_trie;
+    const void *m_addr;  // address of memory region
+    size_t      m_size;  // size of memory region
+    store_t     m_store; // read-only node and data store
+    ptr_t       m_root;  // root position
+    trie_t      m_trie;  // underlying strie
 
 public:
     template <typename F>
@@ -47,7 +52,9 @@ public:
         , m_reg(m_fmap, bip::read_only)
         , m_addr(m_reg.get_address())
         , m_size(m_reg.get_size())
-        , m_trie(m_addr, m_size, root(m_addr, m_size))
+        , m_store(m_addr, m_size)
+        , m_root(root(m_addr, m_size))
+        , m_trie(m_store, m_root)
     {}
 
     ~mmap_strie() {}
@@ -56,33 +63,6 @@ public:
     template <typename A, typename F>
     void fold(const char *key, A& acc, F proc) {
         m_trie.fold(key, acc, proc);
-    }
-
-    // lookup data by key, prefix matching only
-    template <typename F>
-    data_t* lookup(const char *a_key, F is_empty) {
-        return m_trie.lookup(a_key, is_empty);
-    }
-
-    // lookup data by key, prefix matching only, default "data empty" functor
-    data_t* lookup(const char *a_key) {
-        return m_trie.lookup(a_key);
-    }
-
-    // lookup data by key, prefix matching only, simple "data empty" functor
-    data_t* lookup_simple(const char *a_key) {
-        return m_trie.lookup_simple(a_key);
-    }
-
-    // lookup data by key, exact matching allowed
-    template <typename F>
-    data_t* lookup_exact(const char *a_key, F is_empty) {
-        return m_trie.lookup_exact(a_key, is_empty);
-    }
-
-    // lookup data by key, exact matching allowed, default "data empty" functor
-    data_t* lookup_exact(const char *a_key) {
-        return m_trie.lookup_exact(a_key);
     }
 };
 

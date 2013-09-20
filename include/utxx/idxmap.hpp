@@ -4,7 +4,6 @@
  * \brief symbol-to-index mapping
  *
  * \author Dmitriy Kargapolov
- * \version 1.0
  * \since 01 April 2013
  *
  */
