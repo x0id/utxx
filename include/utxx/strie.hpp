@@ -97,7 +97,7 @@ public:
         // write children encoded, get encoded reference
         typename sarray_t::template ext_header<T> l_children;
         m_children.write_to_file(l_children,
-            boost::bind(&strie_node::write_child<T>, this,
+            boost::bind(&strie_node::template write_child<T>, this,
                 boost::cref(a_store), _1, _2), a_ofs);
 
         // save offset of the node encoded

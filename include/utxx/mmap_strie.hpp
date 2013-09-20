@@ -33,9 +33,12 @@ template <typename Data, typename Offset = int>
 class mmap_strie {
 protected:
     typedef strie<flat_data_store<void, Offset>, Data, sarray<> > trie_t;
+
+public:
     typedef typename trie_t::store_t store_t;
     typedef typename trie_t::ptr_t ptr_t;
 
+protected:
     bip::file_mapping  m_fmap;
     bip::mapped_region m_reg;
 

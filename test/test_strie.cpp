@@ -252,9 +252,11 @@ BOOST_FIXTURE_TEST_CASE( write_read_test, f0 )
         "\ntrie: num of chars in keys: " << l_cnt <<
         "\n" <<
         "\ntrie: data bytes allocated: " << memstat<cData>::cnt <<
-        "\ntrie: node bytes allocated: " << memstat<cStore>::cnt <<
-        "\ntrie: nptr bytes allocated: " << memstat<cTrie>::cnt <<
         "\ntrie:      nodes allocated: " << l_data.store().count() <<
+        "\ntrie: node bytes allocated: " << memstat<cStore>::cnt <<
+        "\ntrie:       bytes per node: " <<
+                memstat<cStore>::cnt / l_data.store().count() <<
+        "\ntrie: nptr bytes allocated: " << memstat<cTrie>::cnt <<
         "\ntrie: total byte allocated: " << l_trie_cnt <<
         "\ntrie:     bytes per object: " << l_trie_cnt / l_tab.size() <<
         "\n" <<
