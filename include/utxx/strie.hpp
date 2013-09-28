@@ -113,7 +113,7 @@ public:
 
     // should be called before destruction, can't pass a_store to destructor
     void clear(store_t& a_store) {
-        m_children.foreach(
+        m_children.foreach_value(
             boost::bind(&strie_node::del_child, boost::ref(a_store), _1));
     }
 

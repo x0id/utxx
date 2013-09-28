@@ -25,6 +25,7 @@
 #include <utxx/idxmap.hpp>
 #include <vector>
 #include <boost/foreach.hpp>
+#include <fstream>
 
 namespace utxx {
 
@@ -73,9 +74,30 @@ public:
         return m_array.at(l_index);
     }
 
-    // used by trie destuctor only when store::dynamic == true
-    template<typename F> void foreach(F f) {
+    // call functor for each value
+    template<typename F> void foreach_value(F f) {
         BOOST_FOREACH(const Data& data, m_array) f(data);
+    }
+
+    // key to key-val functor adapter
+    template<typename T, typename F>
+    class k2kv {
+        const T& a_;
+        const F& f_;
+        typename T::const_iterator i_;
+    public:
+        k2kv(const T& a, const F& f) : a_(a), f_(f) {
+            i_ = a_.begin();
+        }
+        template<typename U>
+        void operator()(U k) {
+            f_(k, *i_); ++i_;
+        }
+    };
+
+    // call functor for each key-value pair
+    template<typename F> void foreach_keyval(F f) {
+        IdxMap::foreach(m_mask, k2kv<array_t, F>(m_array, f));
     }
 
     template <typename OffsetType>

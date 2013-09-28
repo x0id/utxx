@@ -1,10 +1,10 @@
 // ex: ts=4 sw=4 ft=cpp et indentexpr=
 /**
  * \file
- * \brief s-trie in memory mapped region
+ * \brief ac-trie in memory mapped region
  *
  * \author Dmitriy Kargapolov
- * \since 16 April 2013
+ * \since 24 September 2013
  *
  */
 
@@ -15,10 +15,10 @@
  * at http://www.boost.org/LICENSE_1_0.txt)
  */
 
-#ifndef _UTXX_MMAP_STRIE_HPP_
-#define _UTXX_MMAP_STRIE_HPP_
+#ifndef _UTXX_MMAP_ACTRIE_HPP_
+#define _UTXX_MMAP_ACTRIE_HPP_
 
-#include <utxx/strie.hpp>
+#include <utxx/actrie.hpp>
 #include <utxx/flat_data_store.hpp>
 #include <utxx/sarray.hpp>
 
@@ -30,9 +30,9 @@ namespace utxx {
 namespace { namespace bip = boost::interprocess; }
 
 template <typename Data, typename Offset = int>
-class mmap_strie {
+class mmap_actrie {
 protected:
-    typedef strie<flat_data_store<void, Offset>, Data, sarray<> > trie_t;
+    typedef actrie<flat_data_store<void, Offset>, Data, sarray<> > trie_t;
 
 public:
     typedef typename trie_t::store_t store_t;
@@ -46,11 +46,11 @@ protected:
     size_t      m_size;  // size of memory region
     store_t     m_store; // read-only node and data store
     ptr_t       m_root;  // root position
-    trie_t      m_trie;  // underlying strie
+    trie_t      m_trie;  // underlying actrie
 
 public:
     template <typename F>
-    mmap_strie(const char *fname, F root)
+    mmap_actrie(const char *fname, F root)
         : m_fmap(fname, bip::read_only)
         , m_reg(m_fmap, bip::read_only)
         , m_addr(m_reg.get_address())
@@ -65,8 +65,14 @@ public:
     void fold(const char *key, A& acc, F proc) {
         m_trie.fold(key, acc, proc);
     }
+
+    // fold through trie nodes following key components
+    template <typename A, typename F>
+    void fold_full(const char *key, A& acc, F proc) {
+        m_trie.fold(key, acc, proc);
+    }
 };
 
 } // namespace utxx
 
-#endif // _UTXX_MMAP_STRIE_HPP_
+#endif // _UTXX_MMAP_ACTRIE_HPP_

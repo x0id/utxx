@@ -42,6 +42,7 @@ template<typename Offset>
 struct meta {
     Offset node; ///< offset of the node written
     Offset link; ///< offset of the blue link written
+    meta() : node(0), link(0) {}
 };
 
 template<> struct meta<void> {};
@@ -57,6 +58,7 @@ template<> struct meta<void> {};
  */
 template <typename Store, typename Data, typename SArray, typename Offset>
 class actrie_node {
+    actrie_node(const actrie_node&);
 public:
     typedef typename Store::template rebind<actrie_node>::other store_t;
     typedef typename store_t::pointer_t ptr_t;
@@ -67,7 +69,7 @@ public:
 
     typedef meta<Offset> meta_t;
 
-    actrie_node() {}
+    actrie_node() : m_suffix(store_t::null) {}
 
     // build path adding missing nodes if needed
     actrie_node *path_to_node(store_t& a_store, const char *a_key) {
@@ -92,17 +94,49 @@ public:
         a_merge(l_node_ptr->m_data, a_data);
     }
 
+    // calculate blue links
+    void make_links(const store_t& a_store, const std::string& a_key) {
+        // first process children
+        m_children.foreach_keyval(boost::bind(&actrie_node::make_link,
+            boost::cref(a_store), _2, boost::cref(a_key), _1));
+        // find my nearest suffix
+        if (a_key.empty()) return;
+        const char *l_key = a_key.c_str();
+        while (*(++l_key) != 0) {
+            if ((m_suffix = find_exact(a_store, l_key)) != store_t::null)
+                break;
+        }
+    }
+
     // fold through trie nodes following key components
     template <typename A, typename F>
-    void fold(store_t& store, const char *key, A& acc, F proc) {
-        const char *l_ptr = key;
-        symbol_t l_symbol;
+    void fold(const store_t& store, const char *key, A& acc, F proc) {
+        symbol_t l_char;
         actrie_node *l_node_ptr = this;
-        while ((l_symbol = *l_ptr++) != 0) {
-            l_node_ptr = l_node_ptr->read_node(store, l_symbol);
+        while ((l_char = *key++) != 0) {
+            l_node_ptr = l_node_ptr->read_node(store, l_char);
             if (!l_node_ptr)
                 break;
-            if (!proc(acc, l_node_ptr->m_data, store, l_ptr))
+            if (!proc(acc, l_node_ptr->m_data, store, key))
+                break;
+        }
+    }
+
+    // fold through trie nodes following key components and blue links
+    template <typename A, typename F>
+    void fold_full(const store_t& store, const char *key, A& acc, F proc) {
+        symbol_t l_char;
+        actrie_node *l_node_ptr = this;
+        while ((l_char = *key++) != 0) {
+            for (;;) {
+                // try child
+                l_node_ptr = l_node_ptr->read_node(store, l_char);
+                if (l_node_ptr) break;
+                // try suffix
+                l_node_ptr = l_node_ptr->read_suffix(store);
+                if (!l_node_ptr) return; // should not happen
+            }
+            if (!proc(acc, l_node_ptr->m_data, store, key))
                 break;
         }
     }
@@ -148,8 +182,8 @@ public:
     // write node to file - 2nd pass
     void write_links(const store_t& a_store, std::ofstream& a_ofs) {
         // first process children
-        m_children.foreach(boost::bind(&actrie_node::write_link,
-            boost::ref(a_store), boost::ref(a_ofs), _1));
+        m_children.foreach_value(boost::bind(&actrie_node::write_link,
+            boost::cref(a_store), boost::ref(a_ofs), _1));
         // suffix node reference
         if (m_suffix == store_t::null)
             return;
@@ -164,31 +198,28 @@ public:
 
     // should be called before destruction, can't pass a_store to destructor
     void clear(store_t& a_store) {
-        m_children.foreach(
+        m_children.foreach_value(
             boost::bind(&actrie_node::del_child, boost::ref(a_store), _1));
     }
 
 private:
-    // used by sarray_t writer
-    template <typename T>
-    T write_child(const store_t& a_store, ptr_t a_child, std::ofstream& a_ofs)
-            const {
-        actrie_node *l_ptr = a_store.
-            template native_pointer<actrie_node>(a_child);
-        if (!l_ptr)
-            throw std::invalid_argument("bad store pointer");
-        return l_ptr->write_to_file<T>(a_store, a_ofs);
-    }
-
-    actrie_node *read_node(store_t& a_store, symbol_t a_symbol) {
-        const ptr_t *l_next_ptr = m_children.get(a_symbol);
-        if (l_next_ptr == 0)
+    actrie_node *convert(const store_t& a_store, ptr_t a_pointer) {
+        if (a_pointer == store_t::null)
             return 0;
         actrie_node *l_ptr = a_store.
-            template native_pointer<actrie_node>(*l_next_ptr);
+            template native_pointer<actrie_node>(a_pointer);
         if (!l_ptr)
             throw std::invalid_argument("bad store pointer");
         return l_ptr;
+    }
+
+    actrie_node *read_suffix(store_t& a_store) {
+        return convert(a_store, m_suffix);
+    }
+
+    actrie_node *read_node(const store_t& a_store, symbol_t a_symbol) {
+        const ptr_t *l_next_ptr = m_children.get(a_symbol);
+        return l_next_ptr ? convert(a_store, *l_next_ptr) : 0;
     }
 
     actrie_node *next_node(store_t& a_store, symbol_t a_symbol) {
@@ -208,6 +239,36 @@ private:
         return l_ptr;
     }
 
+    // return reference to node matching a_key exactly or store_t::null
+    ptr_t find_exact(const store_t& a_store, const char *a_key) {
+        const char *l_ptr = a_key;
+        symbol_t l_symbol;
+        actrie_node *l_node_ptr = this;
+        const ptr_t *l_next_ptr;
+        while ((l_symbol = *l_ptr++) != 0) {
+            // get child by symbol
+            l_next_ptr = l_node_ptr->m_children.get(l_symbol);
+            if (l_next_ptr == 0)
+                return store_t::null;
+            l_node_ptr = a_store.
+                template native_pointer<actrie_node>(*l_next_ptr);
+            if (!l_node_ptr)
+                throw std::invalid_argument("bad store pointer");
+        }
+        return *l_next_ptr;
+    }
+
+    // used by sarray_t writer
+    template <typename T>
+    T write_child(const store_t& a_store, ptr_t a_child, std::ofstream& a_ofs)
+            const {
+        actrie_node *l_ptr = a_store.
+            template native_pointer<actrie_node>(a_child);
+        if (!l_ptr)
+            throw std::invalid_argument("bad store pointer");
+        return l_ptr->write_to_file<T>(a_store, a_ofs);
+    }
+
 public:
     // child clean up - used by clear()
     static void del_child(store_t& a_store, ptr_t a_child) {
@@ -221,9 +282,20 @@ public:
     }
 
 private:
+    // calculate blue link for a child
+    static void make_link(const store_t& a_store, ptr_t a_child,
+            const std::string& a_key, symbol_t a_symbol) {
+        actrie_node *l_ptr = a_store.
+            template native_pointer<actrie_node>(a_child);
+        if (!l_ptr) return;
+        // recursive call to child's children
+        std::string l_key = a_key + a_symbol;
+        l_ptr->make_links(a_store, l_key);
+    }
+
     // write node to file - 2nd pass wrapper for a child
-    static
-    void write_link(store_t& a_store, std::ofstream& a_ofs, ptr_t a_child) {
+    static void write_link(const store_t& a_store, std::ofstream& a_ofs,
+            ptr_t a_child) {
         actrie_node *l_ptr = a_store.
             template native_pointer<actrie_node>(a_child);
         if (!l_ptr) return;
@@ -231,11 +303,11 @@ private:
         l_ptr->write_links(a_store, a_ofs);
     }
 
-    mutable meta_t m_meta; ///< node metadata if any
-
     Data      m_data;      ///< node data payload
     ptr_t     m_suffix;    ///< link to longest possible suffix node
     sarray_t  m_children;  ///< collection of child nodes
+
+    mutable meta_t m_meta; ///< node metadata if any
 };
 
 }
@@ -307,9 +379,21 @@ public:
         m_root.update(m_store, a_key, a_data, a_merge);
     }
 
+    // calculate blue links
+    void make_links() {
+        std::string l_key = "";
+        m_root.make_links(m_store, l_key);
+    }
+
     // fold through trie nodes following key components
     template <typename A, typename F>
     void fold(const char *key, A& acc, F proc) {
+        m_root.fold(m_store, key, acc, proc);
+    }
+
+    // fold through trie nodes following key components and suffixes
+    template <typename A, typename F>
+    void fold_full(const char *key, A& acc, F proc) {
         m_root.fold(m_store, key, acc, proc);
     }
 
@@ -346,14 +430,19 @@ public:
     template <typename T>
     void write_to_file(const char *a_fname) {
         ofile l_file(a_fname);
+        std::ofstream& l_ofs = l_file.ofs();
         char l_magic = 'A';
-        l_file.ofs().write(&l_magic, sizeof(l_magic));
+        l_ofs.write(&l_magic, sizeof(l_magic));
         enc_trie<T> l_trie;
         // write nodes
-        l_trie.m_root = m_root.write_to_file<T>(m_store, l_file.ofs());
-        m_root.write_links(m_store, l_file.ofs());
+        l_trie.m_root = m_root.write_to_file<T>(m_store, l_ofs);
+        // save header offset
+        T l_hdr = boost::numeric_cast<T, std::streamoff>(l_ofs.tellp());
+        // update blue links
+        m_root.write_links(m_store, l_ofs);
         // write trie
-        l_trie.write_to_file(m_store, l_file.ofs());
+        l_ofs.seekp(l_hdr);
+        l_trie.write_to_file(m_store, l_ofs);
     }
 
     // aux method for custom writers
