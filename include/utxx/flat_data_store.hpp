@@ -24,7 +24,7 @@ namespace utxx {
 
 // flat memory region abstract strie node and data store
 //
-template <typename Node = void, typename OffsetType = int>
+template <typename Node = void, typename OffsetType = unsigned>
 class flat_data_store {
 public:
     // rebind to other node type

@@ -69,7 +69,7 @@ public:
     // fold through trie nodes following key components
     template <typename A, typename F>
     void fold_full(const char *key, A& acc, F proc) {
-        m_trie.fold(key, acc, proc);
+        m_trie.fold_full(key, acc, proc);
     }
 };
 

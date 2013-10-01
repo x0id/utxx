@@ -95,15 +95,16 @@ public:
     }
 
     // calculate blue links
-    void make_links(const store_t& a_store, const std::string& a_key) {
+    void make_links(const store_t& a_store, ptr_t a_root,
+            const std::string& a_key) {
         // first process children
         m_children.foreach_keyval(boost::bind(&actrie_node::make_link,
-            boost::cref(a_store), _2, boost::cref(a_key), _1));
+            boost::cref(a_store), a_root, _2, boost::cref(a_key), _1));
         // find my nearest suffix
-        if (a_key.empty()) return;
         const char *l_key = a_key.c_str();
-        while (*(++l_key) != 0) {
-            if ((m_suffix = find_exact(a_store, l_key)) != store_t::null)
+        while (*l_key++) {
+            m_suffix = find_exact(a_store, a_root, l_key);
+            if (m_suffix != store_t::null)
                 break;
         }
     }
@@ -127,17 +128,35 @@ public:
     void fold_full(const store_t& store, const char *key, A& acc, F proc) {
         symbol_t l_char;
         actrie_node *l_node_ptr = this;
-        while ((l_char = *key++) != 0) {
-            for (;;) {
-                // try child
-                l_node_ptr = l_node_ptr->read_node(store, l_char);
-                if (l_node_ptr) break;
-                // try suffix
-                l_node_ptr = l_node_ptr->read_suffix(store);
-                if (!l_node_ptr) return; // should not happen
+
+        while ((l_char = *key) != 0) {
+
+            // get child node
+            actrie_node *l_child = l_node_ptr->read_node(store, l_char);
+            if (l_child) {
+                l_node_ptr = l_child;
+                ++key;
+
+                // process current node and all suffixes
+                actrie_node *l_node = l_node_ptr;
+                while ( proc(acc, l_node->m_data, store, key) ) {
+                    // get next suffix
+                    l_node = l_node->read_suffix(store);
+                    if (l_node == 0)
+                        break;
+                }
+                continue;
             }
-            if (!proc(acc, l_node_ptr->m_data, store, key))
-                break;
+
+            // get suffix node
+            actrie_node *l_suffix = l_node_ptr->read_suffix(store);
+
+            if (l_suffix == 0)
+                // no child, no suffix - advance key
+                ++key;
+            else
+                // switch to suffix found
+                l_node_ptr = l_suffix;
         }
     }
 
@@ -213,7 +232,7 @@ private:
         return l_ptr;
     }
 
-    actrie_node *read_suffix(store_t& a_store) {
+    actrie_node *read_suffix(const store_t& a_store) {
         return convert(a_store, m_suffix);
     }
 
@@ -240,20 +259,20 @@ private:
     }
 
     // return reference to node matching a_key exactly or store_t::null
-    ptr_t find_exact(const store_t& a_store, const char *a_key) {
+    ptr_t find_exact(const store_t& a_store, ptr_t a_root, const char *a_key) {
         const char *l_ptr = a_key;
         symbol_t l_symbol;
-        actrie_node *l_node_ptr = this;
-        const ptr_t *l_next_ptr;
+        actrie_node *l_node_ptr;
+        const ptr_t *l_next_ptr = &a_root;
         while ((l_symbol = *l_ptr++) != 0) {
-            // get child by symbol
-            l_next_ptr = l_node_ptr->m_children.get(l_symbol);
-            if (l_next_ptr == 0)
-                return store_t::null;
             l_node_ptr = a_store.
                 template native_pointer<actrie_node>(*l_next_ptr);
             if (!l_node_ptr)
                 throw std::invalid_argument("bad store pointer");
+            // get child by symbol
+            l_next_ptr = l_node_ptr->m_children.get(l_symbol);
+            if (l_next_ptr == 0)
+                return store_t::null;
         }
         return *l_next_ptr;
     }
@@ -283,14 +302,14 @@ public:
 
 private:
     // calculate blue link for a child
-    static void make_link(const store_t& a_store, ptr_t a_child,
+    static void make_link(const store_t& a_store, ptr_t a_root, ptr_t a_child,
             const std::string& a_key, symbol_t a_symbol) {
         actrie_node *l_ptr = a_store.
             template native_pointer<actrie_node>(a_child);
         if (!l_ptr) return;
         // recursive call to child's children
         std::string l_key = a_key + a_symbol;
-        l_ptr->make_links(a_store, l_key);
+        l_ptr->make_links(a_store, a_root, l_key);
     }
 
     // write node to file - 2nd pass wrapper for a child
@@ -382,7 +401,7 @@ public:
     // calculate blue links
     void make_links() {
         std::string l_key = "";
-        m_root.make_links(m_store, l_key);
+        m_root.make_links(m_store, m_root_ptr, l_key);
     }
 
     // fold through trie nodes following key components
@@ -394,7 +413,7 @@ public:
     // fold through trie nodes following key components and suffixes
     template <typename A, typename F>
     void fold_full(const char *key, A& acc, F proc) {
-        m_root.fold(m_store, key, acc, proc);
+        m_root.fold_full(m_store, key, acc, proc);
     }
 
     // RAII-wrapper for std::ofstream
