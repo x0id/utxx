@@ -25,7 +25,7 @@
 
 namespace utxx {
 
-namespace {
+namespace detail {
 
 /**
  * \brief optional node metadata
@@ -66,7 +66,7 @@ public:
     typedef typename sarray_t::symbol_t symbol_t;
 
     // metadata to support cross-links writing
-    typedef meta<Offset> meta_t;
+    typedef detail::meta<Offset> meta_t;
 
     // constructor
     pnode_ss() : m_suffix(store_t::null), m_shift(0) {}
@@ -95,6 +95,9 @@ public:
         // reserve space for the suffix link, fill it with zero
         T l_link = 0;
         a_ofs.write((const char *)&l_link, sizeof(l_link));
+
+        // write shift
+        a_ofs.write((const char *)&m_shift, sizeof(m_shift));
 
         // write encoded children reference
         l_children.write_to_file(a_ofs);

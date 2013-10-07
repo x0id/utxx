@@ -39,6 +39,7 @@ TEST_UTXX_SRCS = \
 	test_persist_blob.cpp \
 	test_persist_array.cpp \
 	test_pidfile.cpp \
+	test_ptrie.cpp \
 	test_robust_mutex.cpp \
 	test_running_stat.cpp \
 	test_strie.cpp \

@@ -69,6 +69,10 @@ public:
         trie_destructor<store_t::dynamic>::template destroy<ptrie>(*this);
     }
 
+    // access to node store
+    const store_t& store() const { return m_store; }
+    store_t& store() { return m_store; }
+
     // destroy hierarchy of nodes starting with root
     void clear() { clear(m_root_ptr); }
 
@@ -87,6 +91,13 @@ public:
     // calculate suffix links
     void make_links() {
         foreach(boost::bind(&ptrie::make_link, this, _2, _1));
+    }
+
+    // print trie
+    template<typename T>
+    void print_trie(T& out) {
+        foreach(boost::bind(
+            &ptrie::template print_node<T>, this, _2, _1, boost::ref(out)));
     }
 
     // traverse trie
@@ -135,14 +146,10 @@ public:
             }
 
             // get suffix node
-            node_t *suffix = read_suffix(node);
-
-            if (suffix == 0)
-                // no child, no suffix - advance key
-                ++key;
-            else
-                // switch to suffix found
-                node = suffix;
+            if ((node = read_suffix(node)) == 0) {
+                // no child, no suffix - advance key, reset node pointer
+                ++key; node = &m_root;
+            }
         }
     }
 
@@ -240,8 +247,8 @@ protected:
     // used by foreach
     template<typename F>
     void foreach(node_t& root, const std::string& key, F& fun) {
-        root.children().foreach_keyval(boost::bind(&ptrie::each<F>, this,
-            _2, boost::cref(key), _1, boost::ref(fun)));
+        root.children().foreach_keyval(boost::bind(&ptrie::template each<F>,
+            this, _2, boost::cref(key), _1, boost::ref(fun)));
         fun(key, root);
     }
 
@@ -275,6 +282,12 @@ protected:
             p_node = node_ptr(*p_ptr);
         }
         return p_ptr ? *p_ptr : store_t::null;
+    }
+
+    // print node
+    template<typename T>
+    void print_node(node_t& a_node, const std::string& a_key, T& out) {
+        out << a_key << ": " << a_node.suffix() << "\n";
     }
 
     // used by sarray_t writer

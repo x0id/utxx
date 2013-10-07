@@ -1,7 +1,7 @@
 // ex: ts=4 sw=4 ft=cpp et indentexpr=
 /**
  * \file
- * \brief Test cases for classes and functions in the actrie.hpp
+ * \brief Test cases for persistent trie in aho-corasick mode
  *
  * \author Dmitriy Kargapolov <dmitriy dot kargapolov at gmail dot com>
  * \since 27 September 2013
@@ -14,19 +14,22 @@
  */
 
 #include <config.h>
+#include <utxx/pnode_ss.hpp>
+#include <utxx/pnode_ss_ro.hpp>
+#include <utxx/ptrie.hpp>
+#include <utxx/mmap_ptrie.hpp>
 #include <utxx/simple_node_store.hpp>
+#include <utxx/flat_data_store.hpp>
 #include <utxx/svector.hpp>
-#include <utxx/mmap_actrie.hpp>
+#include <utxx/sarray.hpp>
+
+#include <set>
 
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 
 #if defined HAVE_BOOST_CHRONO
 #include <boost/chrono/system_clocks.hpp>
 #endif
-
-#include <boost/unordered_map.hpp>
-#include <map>
 
 namespace actrie_test {
 
@@ -60,10 +63,15 @@ typedef std::list<std::string> ret_t;
 typedef uint32_t offset_t;
 
 struct f0 {
-    typedef utxx::actrie<
+    // expandable aho-corasick trie node (with suffix link and shift field)
+    typedef utxx::pnode_ss<
         utxx::simple_node_store<>, std::string, utxx::svector<>
-    > trie_t;
+    > node_t;
 
+    // expandable aho-corasick trie type
+    typedef utxx::ptrie<node_t> trie_t;
+
+    // node store type
     typedef typename trie_t::store_t store_t;
 
     // fold functor to gather matched tags
@@ -110,9 +118,12 @@ struct f1 {
     };
 
     // expandable trie with export functions
-    typedef utxx::actrie<
+    typedef utxx::pnode_ss<
         utxx::simple_node_store<>, data, utxx::svector<>, offset_t
-    > trie_t;
+    > node_t;
+
+    // expandable trie type with export functions
+    typedef utxx::ptrie<node_t> trie_t;
 };
 
 struct f2 {
@@ -120,7 +131,10 @@ struct f2 {
         uint8_t len;
         char str[0];
     };
-    typedef utxx::mmap_actrie<offset_t, offset_t> trie_t;
+    typedef utxx::pnode_ss_ro<
+        utxx::flat_data_store<void, offset_t>, offset_t, utxx::sarray<>
+    > node_t;
+    typedef utxx::mmap_ptrie<node_t> trie_t;
     typedef typename trie_t::store_t store_t;
 
     static offset_t root(const void *m_addr, size_t m_size) {
