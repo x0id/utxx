@@ -35,6 +35,7 @@ class sarray {
 
 public:
     typedef typename IdxMap::symbol_t symbol_t;
+    typedef typename IdxMap::bad_symbol bad_symbol;
 
     template<typename U>
     struct rebind { typedef sarray<U, IdxMap> other; };

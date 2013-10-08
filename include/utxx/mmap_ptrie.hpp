@@ -35,6 +35,7 @@ protected:
 public:
     typedef typename trie_t::store_t store_t;
     typedef typename trie_t::ptr_t ptr_t;
+    typedef typename trie_t::symbol_t symbol_t;
 
 protected:
     bip::file_mapping  m_fmap;
@@ -60,13 +61,13 @@ public:
 
     // fold through trie nodes following key components
     template <typename A, typename F>
-    void fold(const char *key, A& acc, F proc) {
+    void fold(const symbol_t *key, A& acc, F proc) {
         m_trie.fold(key, acc, proc);
     }
 
     // fold through trie nodes following key components
     template <typename A, typename F>
-    void fold_full(const char *key, A& acc, F proc) {
+    void fold_full(const symbol_t *key, A& acc, F proc) {
         m_trie.fold_full(key, acc, proc);
     }
 };

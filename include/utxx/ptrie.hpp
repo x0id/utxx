@@ -181,6 +181,26 @@ public:
         return ret;
     }
 
+    // RAII-wrapper for std::ofstream
+    // can't just rely on std::ofstream destructor due to enabled exceptions
+    // which could be thrown while in std::ofstream destructor...
+    class ofile {
+        std::ofstream m_ofs;
+    public:
+        ofile(const char *a_fname) {
+            m_ofs.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+            m_ofs.open(a_fname, std::ofstream::out |
+                std::ofstream::binary | std::ofstream::trunc);
+        }
+        ~ofile() {
+            try {
+                m_ofs.close();
+            } catch (...) {
+            }
+        }
+        std::ofstream& ofs() { return m_ofs; }
+    };
+
 protected:
     // use external root reference
     node_t& get_root(ptr_t a_ptr) {
@@ -322,26 +342,6 @@ protected:
             throw std::invalid_argument("bad store pointer");
         return l_ptr;
     }
-
-    // RAII-wrapper for std::ofstream
-    // can't just rely on std::ofstream destructor due to enabled exceptions
-    // which could be thrown while in std::ofstream destructor...
-    class ofile {
-        std::ofstream m_ofs;
-    public:
-        ofile(const char *a_fname) {
-            m_ofs.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-            m_ofs.open(a_fname, std::ofstream::out |
-                std::ofstream::binary | std::ofstream::trunc);
-        }
-        ~ofile() {
-            try {
-                m_ofs.close();
-            } catch (...) {
-            }
-        }
-        std::ofstream& ofs() { return m_ofs; }
-    };
 
     // class fields
     store_t  m_store;    // data and node store
