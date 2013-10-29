@@ -12,6 +12,7 @@ TEST_UTXX64_SRCS = \
 	test_name.cpp
 
 TEST_UTXX_SRCS = \
+	test_actrie.cpp \
 	test_atomic_value.cpp \
 	test_alloc_fixed_page.cpp \
 	test_basic_udp_receiver.cpp \
@@ -38,9 +39,9 @@ TEST_UTXX_SRCS = \
 	test_persist_blob.cpp \
 	test_persist_array.cpp \
 	test_pidfile.cpp \
+	test_ptrie.cpp \
 	test_robust_mutex.cpp \
 	test_running_stat.cpp \
-	test_strie.cpp \
 	test_string.cpp \
 	test_throttler.cpp \
 	test_timestamp.cpp \
