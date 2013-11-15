@@ -50,6 +50,13 @@ AC_ARG_ENABLE(warnings,
      ],
 )
 
+dnl optional pure compilation tests
+AC_ARG_ENABLE(demo,
+    AC_HELP_STRING([--enable-demo], [compile demo programs [[default=no]]]),
+    [case ${enableval} in yes) demo=true;; *) demo=false;; esac], [demo=false]
+)
+AM_CONDITIONAL([DEMO], [test "x$demo" = "xtrue"])
+
 # libtool
 LT_INIT([disable-static])
 
@@ -137,6 +144,7 @@ dnl ------------------------------------------------------------------
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([test/Makefile])
+AC_CONFIG_FILES([demo/Makefile])
 AC_CONFIG_FILES([test.sh], [chmod +x test.sh])
 AC_CONFIG_FILES([utxx.pc:utxx.pc.in])
 
