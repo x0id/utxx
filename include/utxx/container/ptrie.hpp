@@ -47,12 +47,8 @@ void trie_destructor<true>::destroy(T& trie) { trie.clear(); }
 
 // optional const qualifier, used by trie_walker
 template<bool Const, typename T> struct const_qual;
-template<typename T> struct const_qual<true, T> {
-    typedef const T type;
-};
-template<typename T> struct const_qual<false, T> {
-    typedef T type;
-};
+template<typename T> struct const_qual<true, T> { typedef const T type; };
+template<typename T> struct const_qual<false, T> { typedef T type; };
 
 // trie traversing helper
 template<typename Node, bool Const, dir_t Dir, typename Key, typename F>
@@ -77,24 +73,27 @@ public:
         m_key.push_back(a_sym);
     }
 
-    template<typename V>
-    void operator()(symbol_t k, V v) {
-        if (v == store_t::null)
-            throw std::invalid_argument("null store pointer");
-        node_t *l_ptr = m_store.template native_pointer<node_t>(v);
-        if (!l_ptr)
-            throw std::invalid_argument("bad store pointer");
-        trie_walker next_level(*this, k);
-        next_level.foreach(*l_ptr);
+    template<typename Coll>
+    void for_each_child(const Coll& coll) {
+        typedef typename Coll::const_iterator it_t;
+        for (it_t it = coll.begin(), e = coll.end(); it != e; ++it) {
+            if (it->second == store_t::null)
+                throw std::invalid_argument("null store pointer");
+            node_t *l_ptr = m_store.template native_pointer<node_t>(it->second);
+            if (!l_ptr)
+                throw std::invalid_argument("bad store pointer");
+            trie_walker next_level(*this, it->first);
+            next_level.foreach(*l_ptr);
+        }
     }
 
     void foreach(node_t& a_node) {
         if (Dir == up) {
-            a_node.children().foreach_keyval(*this);
+            for_each_child(a_node.children());
             m_fun(m_key, a_node, m_store);
         } else {
             m_fun(m_key, a_node, m_store);
-            a_node.children().foreach_keyval(*this);
+            for_each_child(a_node.children());
         }
     }
 };
@@ -339,17 +338,21 @@ protected:
 
     // node clean up - used by clear()
     void clear(ptr_t a_node) {
-        if (a_node == store_t::null)
-            return;
-        node_t *l_ptr = m_store.
-            template native_pointer<node_t>(a_node);
-        if (!l_ptr)
-            return;
+        // get native pointer
+        if (a_node == store_t::null) return;
+        node_t *l_ptr = m_store.template native_pointer<node_t>(a_node);
+        if (!l_ptr) return;
         // recursive call to child's children
-        l_ptr->children().foreach_value(
-            boost::bind(&ptrie::clear, this, _1));
+        clear_children(l_ptr->children());
         // this calls child's destructor
         m_store.template deallocate<node_t>(a_node);
+    }
+
+    template<typename Coll>
+    void clear_children(const Coll& coll) {
+        typedef typename Coll::const_iterator it_t;
+        for (it_t it = coll.begin(), e = coll.end(); it != e; ++it)
+            clear(it->second);
     }
 
     // get child node pointer, may return null

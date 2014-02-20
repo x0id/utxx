@@ -108,7 +108,10 @@ public:
     template<typename T, typename F>
     void store_links(const store_t& store, F f, typename T::store_type& out) {
         // first process children
-        m_children.foreach_value(f);
+        typedef typename sarray_t::const_iterator it_t;
+        const sarray_t& coll = m_children;
+        for (it_t it = coll.begin(), e = coll.end(); it != e; ++it)
+            f(it->second);
         // suffix node reference
         if (m_suffix == store_t::null)
             return;

@@ -31,8 +31,9 @@
 #include <boost/chrono/system_clocks.hpp>
 #endif
 
-#include <boost/unordered_map.hpp>
 #include <map>
+#include <boost/unordered_map.hpp>
+#include <boost/foreach.hpp>
 
 namespace ptrie_test {
 

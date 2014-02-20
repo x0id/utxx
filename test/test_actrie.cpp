@@ -25,7 +25,7 @@
 #include <utxx/container/detail/file_store.hpp>
 
 #include <set>
-#include <boost/numeric/conversion/cast.hpp>
+#include <boost/foreach.hpp>
 
 #include <boost/test/unit_test.hpp>
 

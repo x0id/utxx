@@ -72,12 +72,6 @@ public:
     iterator end() { return iterator(); }
     const_iterator end() const { return const_iterator(); }
 
-    // call functor for each key-value pair
-    template<typename F> void foreach_keyval(F f) const {
-        for (const_iterator it = begin(), e = end(); it != e; ++it)
-            f(it->first, it->second);
-    }
-
     // collection writer preparing data for reading by sarray
     //
     struct encoder {
@@ -106,9 +100,9 @@ public:
 
         template<typename T, typename S, typename F, typename O>
         void store(const T& coll, const S&, F func, O& out) {
-            // BOOST_FOREACH(const typename T::value_type& v, coll)
-            //     store_it(v.first, v.second, func, out);
-            coll.foreach_keyval(ftor<encoder, F, O>(*this, func, out));
+            typedef typename T::const_iterator it_t;
+            for (it_t it = coll.begin(), e = coll.end(); it != e; ++it)
+                store_it(it->first, it->second, func, out);
             buf.first = &body;
             buf.second = sizeof(body) - (capacity - cnt) * sizeof(Data);
         }
@@ -116,14 +110,6 @@ public:
         const buf_t& buff() const { return buf; }
 
     private:
-        template<typename T, typename F, typename O>
-        struct ftor {
-            ftor(T& ftor, F& f, O& o) : t_(ftor), f_(f), o_(o) {}
-            T& t_; F& f_; O& o_;
-            template<typename K, typename V>
-            void operator()(K k, V v) { t_.store_it(k, v, f_, o_); }
-        };
-
         buf_t buf;
     };
 

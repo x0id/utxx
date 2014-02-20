@@ -25,7 +25,6 @@
 #include <utxx/container/detail/idxmap.hpp>
 #include <utxx/container/detail/scollitbase.hpp>
 #include <vector>
-#include <boost/foreach.hpp>
 
 namespace utxx {
 namespace container {
@@ -96,17 +95,6 @@ public:
 
     iterator end() { return iterator(); }
     const_iterator end() const { return const_iterator(); }
-
-    // call functor for each value
-    template<typename F> void foreach_value(F f) {
-        BOOST_FOREACH(const Data& data, m_array) f(data);
-    }
-
-    // call functor for each key-value pair
-    template<typename F> void foreach_keyval(F f) const {
-        for (const_iterator it = begin(), e = end(); it != e; ++it)
-            f(it->first, it->second);
-    }
 };
 
 template <typename Data, typename IdxMap, typename Alloc>
