@@ -84,7 +84,8 @@ public:
         m_open = true;
         m_fname = a_fname;
         m_buf.reset();
-        BOOST_ASSERT(m_buf.capacity() > 0);
+        if (m_buf.capacity() <= 0)
+            throw io_error("Buffer full when opening ", m_fname);
     }
 
     void use_stdin() {
@@ -129,7 +130,8 @@ public:
         if (a_crunch)
             m_buf.crunch();
         while (true) {
-            BOOST_ASSERT(m_buf.capacity() > 0);
+            if (m_buf.capacity() <= 0)
+                throw io_error("Buffer full when reading ", m_fname);
             l_inp.read(m_buf.wr_ptr(), m_buf.capacity());
             int n = l_inp.gcount();
             if (n == 0) {
@@ -219,7 +221,7 @@ public:
                 break;
             }
             if (n < 0)
-                throw io_error("decode error", n, " at ", m_data_offset,
+                throw io_error("decode error ", n, " at ", m_data_offset,
                         " when reading ", base::filename());
             // n == 0: not enough data in buffer
             if (!base::read()) {
