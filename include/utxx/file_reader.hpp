@@ -124,7 +124,7 @@ public:
     /// if a_crunch == true, crunch buffer before reading
     bool read(bool a_crunch = true) {
         std::istream& l_inp = m_use_stdin ? std::cin : m_file;
-        if (!m_open || !m_use_stdin && !m_file.is_open())
+        if (!m_open || (!m_use_stdin && !m_file.is_open()))
             return false;
         if (a_crunch)
             m_buf.crunch();
